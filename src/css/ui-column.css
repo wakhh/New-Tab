@@ -1,0 +1,45 @@
+.ui-column {
+  display: block;
+  border-radius: 4px;
+  margin: 3px 0;
+  padding: 3px 6px;
+  color: var(--panel-text);
+  background: var(--panel-bg);
+  white-space: nowrap;
+  line-height: 1.5;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ui-column:hover {
+  background: var(--hover-bg);
+}
+
+.ui-column.active {
+  background: var(--active-bg);
+  color: var(--accent);
+}
+
+.ui-row,
+.ui-row:hover,
+.ui-row.active {
+  background: transparent;
+  box-shadow: none;
+}
+
+.ui-row > .ui-column {
+  flex: 0 0 auto;
+}
+
+.ui-row > .ui-column.grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ui-column u {
+  text-underline-offset: 2px;
+}
+
+.ui-muted {
+  opacity: 0.4;
+  pointer-events: none;
+}

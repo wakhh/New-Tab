@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "个人新标签页",
+  "version": "0.1.0",
+  "description": "Personal new tab with wallpaper management",
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "permissions": ["storage", "unlimitedStorage", "windows"],
+  "host_permissions": ["<all_urls>"],
+  "web_accessible_resources": [
+    {
+      "resources": ["Pictures/*", "Music/*", "Videos/*", "media-index.json"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "打开独立窗口"
+  },
+  "commands": {
+    "open-window": {
+      "suggested_key": {
+        "default": "Alt+E"
+      },
+      "description": "打开独立小窗口"
+    }
+  }
+}
