@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { useStorage } from './useStorage'
 
 export const _displayModeVideo = useStorage('wp-display-mode-video', 'tile')
@@ -31,16 +32,24 @@ export const wpVideoVolume = useStorage('wp-video-volume', 0)
 export const wpVideoMuted = useStorage('wp-video-muted', true)
 export const mediaVideoVolume = useStorage('media-video-volume', 30)
 export const mediaVideoMuted = useStorage('media-video-muted', false)
-export const mediaAudioVolume = useStorage('media-audio-volume', 30)
-export const mediaAudioMuted = useStorage('media-audio-muted', false)
+export const mediaMusicVolume = useStorage('media-music-volume', 30)
+export const mediaMusicMuted = useStorage('media-music-muted', false)
 
-export const visualPaused = useStorage('media-visual-paused', false)
-export const audioPaused = useStorage('media-audio-paused', false)
-export const wpVideoPlaying = useStorage('wp-video-playing', true)
-export const wpVideoProgress = useStorage('wp-video-progress', { key: '', time: 0 })
+export const videoPaused = useStorage('play-video-paused', false)
+export const musicPaused = useStorage('play-music-paused', false)
+
+export const videoProgress = useStorage('play-video-progress', null, (v) => {
+  if (!v || typeof v !== 'object') return null
+  return { key: v.key || null, time: v.time || 0 }
+})
+export const musicProgress = useStorage('play-music-progress', null, (v) => {
+  if (!v || typeof v !== 'object') return null
+  return { key: v.key || null, time: v.time || 0 }
+})
 
 export const MEDIA_SOURCES = ['local', 'network']
 export const MEDIA_TYPES = ['image', 'music', 'video']
+
 export const sourceStates = {}
 for (const src of MEDIA_SOURCES) {
   sourceStates[src] = {}
@@ -51,8 +60,7 @@ for (const src of MEDIA_SOURCES) {
       sortBy: useStorage(`media-sortby-${key}`, 'time'),
       sortDir: useStorage(`media-sortdir-${key}`, 'desc'),
       selectedItem: useStorage(`media-selected-${key}`, null),
-      currentTime: useStorage(`media-progress-${key}`, null),
-      playMode: useStorage(`media-playmode-${key}`, type === 'image' ? 'single-play' : 'order-loop'),
+      playMode: useStorage(`media-playmode-${key}`, type === 'image' ? 'single-play' : type === 'video' ? 'single-loop' : 'order-loop'),
       playDirection: useStorage(`media-direction-${key}`, 'forward')
     }
   }
@@ -64,11 +72,18 @@ const DEFAULT_NETWORK_FILES = [
 ]
 export const networkFiles = useStorage('media-network-files', DEFAULT_NETWORK_FILES, (v) => (Array.isArray(v) ? v : []))
 
-export const selectedSourceKey = useStorage('media-source-selected', 'local-video')
-export const visualSourceKey = useStorage('media-visual-source', null)
-export const audioSourceKey = useStorage('media-audio-source', null)
+export const selectedSource = useStorage('media-source-selected', { src: 'local', type: 'video' }, (v) => {
+  if (!v || !v.src || !v.type) return { src: 'local', type: 'video' }
+  return v
+})
+export const visualSource = useStorage('media-visual-source', null, (v) => {
+  return v && v.src && v.type ? v : null
+})
+export const musicSource = useStorage('media-music-source', null, (v) => {
+  return v && v.src && v.type ? v : null
+})
 
-export const slideSeconds = useStorage('media-slide-seconds', 3)
+export const mediaImgDuration = useStorage('media-img-duration', 3)
 export const mediaListWidth = useStorage('media-list-width', null)
 export const autoHide = useStorage('auto-hide', false)
 

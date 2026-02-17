@@ -1,6 +1,6 @@
 import { ref, watch } from 'vue'
 
-const isExtension = typeof chrome !== 'undefined' && !!chrome.storage?.local
+const isExtension = typeof browser !== 'undefined' && !!browser.storage?.local
 
 export function useStorage(key, defaultValue, sanitize, options = {}) {
   const { shouldPersist } = options
@@ -19,13 +19,13 @@ export function useStorage(key, defaultValue, sanitize, options = {}) {
     if (!loaded.value) setBeforeLoad = true
     if (!persistEnabled()) return
     save()
-  })
+  }, { deep: true })
 
   async function load() {
     try {
       let raw = localStorage.getItem(key)
       if (raw === null && isExtension) {
-        const result = await chrome.storage.local.get(key)
+        const result = await browser.storage.local.get(key)
         if (result[key] !== undefined) raw = JSON.stringify(result[key])
       }
       if (raw !== null && !setBeforeLoad) {
@@ -48,7 +48,7 @@ export function useStorage(key, defaultValue, sanitize, options = {}) {
     const payload = JSON.stringify(value.value)
     try { localStorage.setItem(key, payload) } catch (e) {}
     if (isExtension) {
-      saveQueue = saveQueue.then(() => chrome.storage.local.set({ [key]: value.value })).catch(() => {})
+      saveQueue = saveQueue.then(() => browser.storage.local.set({ [key]: value.value })).catch(() => {})
       return saveQueue
     }
     return true
@@ -57,7 +57,7 @@ export function useStorage(key, defaultValue, sanitize, options = {}) {
   function remove() {
     try { localStorage.removeItem(key) } catch (e) {}
     if (isExtension) {
-      saveQueue = saveQueue.then(() => chrome.storage.local.remove(key)).catch(() => {})
+      saveQueue = saveQueue.then(() => browser.storage.local.remove(key)).catch(() => {})
       return saveQueue
     }
     return true
@@ -88,11 +88,31 @@ export function useStorage(key, defaultValue, sanitize, options = {}) {
 export { isExtension }
 
 export function resetAllSettings() {
+  const desktopKeys = ['shortcut-icons', 'shortcut-folders', 'shortcut-add-pos']
+  const desktopBackup = {}
+  for (const k of desktopKeys) {
+    try {
+      const raw = localStorage.getItem(k)
+      if (raw !== null) desktopBackup[k] = raw
+    } catch (e) {}
+  }
   try {
     localStorage.clear()
   } catch (e) {}
-  if (isExtension) {
-    try { chrome.storage.local.clear() } catch (e) {}
+  for (const [k, v] of Object.entries(desktopBackup)) {
+    try { localStorage.setItem(k, v) } catch (e) {}
   }
-  location.reload()
+  if (isExtension) {
+    browser.storage.local.get(null).then(all => {
+      const toRestore = {}
+      for (const k of desktopKeys) {
+        if (all[k] !== undefined) toRestore[k] = all[k]
+      }
+      return browser.storage.local.clear().then(() => {
+        if (Object.keys(toRestore).length) browser.storage.local.set(toRestore)
+      })
+    }).finally(() => location.reload())
+  } else {
+    location.reload()
+  }
 }

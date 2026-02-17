@@ -1,9 +1,12 @@
-import { mediaVideoEl, mediaAudioEl } from './usePlaybackState'
-import { videoOwner } from './useVisualOwner'
-import { playbackNav, playbackSeek } from './usePlaybackActions'
-import { visualSourceKey, audioSourceKey, selectedSourceKey, wpVideoProgress } from './usePersist'
-import { currentWallpaper, wpVideoKey } from './useWallpaper'
+import { videoEl } from './useVideoElement'
+import { musicEl } from './useAudioElement'
+import { videoType } from './useSourceState'
+import { playbackNav } from './useItemNav'
+import { playbackSeek } from './useProgressStore'
+import { selectedSource, visualSource, musicSource } from './usePersist'
+import { currentWallpaper, wpVideoKey } from './useThemeWallpaper'
 import { showFloatIcon } from './useFloatIcon'
+import { sourceEquals } from '../utils/media'
 
 let wheelCooldown = false
 
@@ -25,50 +28,50 @@ function _seekOrNav(el, which, delta, navWhich) {
 }
 
 export function onLayerWheel(e) {
+  const isNext = e.deltaY > 0
+
   e.preventDefault()
   if (wheelCooldown) return
   wheelCooldown = true
   setTimeout(() => { wheelCooldown = false }, 150)
 
-  const isNext = e.deltaY > 0
-
-  if (videoOwner.value === 'media') {
-    const el = mediaVideoEl.value
+  if (videoType.value === 'media') {
+    const el = videoEl.value
     if (el && Number.isFinite(el.duration) && el.duration > 0) {
       _seekOrNav(el, 'media-visual', isNext ? 30 : -30, 'media-visual')
       return
     }
   }
 
-  const sel = selectedSourceKey.value
+  const sel = selectedSource.value
   if (sel) {
-    const [, type] = sel.split('-')
-    if (type === 'video' && visualSourceKey.value === sel) {
-      const el = mediaVideoEl.value
+    const type = sel.type
+    if (type === 'video' && sourceEquals(sel, visualSource.value)) {
+      const el = videoEl.value
       if (el && Number.isFinite(el.duration) && el.duration > 0) {
         _seekOrNav(el, 'media-visual', isNext ? 30 : -30, 'media-visual')
         return
       }
     }
-    if (type === 'music' && audioSourceKey.value === sel) {
-      const el = mediaAudioEl.value
+    if (type === 'music' && sourceEquals(sel, musicSource.value)) {
+      const el = musicEl.value
       if (el && Number.isFinite(el.duration) && el.duration > 0) {
-        _seekOrNav(el, 'media-audio', isNext ? 30 : -30, 'media-audio')
+        _seekOrNav(el, 'media-music', isNext ? 30 : -30, 'media-music')
         return
       }
     }
   }
 
-  if (audioSourceKey.value) {
-    const el = mediaAudioEl.value
+  if (musicSource.value) {
+    const el = musicEl.value
     if (el && Number.isFinite(el.duration) && el.duration > 0) {
-      _seekOrNav(el, 'media-audio', isNext ? 30 : -30, 'media-audio')
+      _seekOrNav(el, 'media-music', isNext ? 30 : -30, 'media-music')
       return
     }
   }
 
-  if (visualSourceKey.value) {
-    const [, vtype] = visualSourceKey.value.split('-')
+  if (visualSource.value) {
+    const vtype = visualSource.value.type
     if (vtype === 'image') {
       playbackNav(isNext ? 'next' : 'prev', 'media-visual')
       return
@@ -76,7 +79,7 @@ export function onLayerWheel(e) {
   }
 
   if (currentWallpaper.value?.isVideo) {
-    const el = mediaVideoEl.value
+    const el = videoEl.value
     if (el && Number.isFinite(el.duration) && el.duration > 0) {
       const dur = el.duration
       const cur = el.currentTime
@@ -86,7 +89,6 @@ export function onLayerWheel(e) {
       else next = Math.min(next, dur)
       if (next !== cur) {
         el.currentTime = next
-        wpVideoProgress.set({ key: wpVideoKey(), time: next })
         showFloatIcon(isNext ? '»' : '«')
       }
     }

@@ -1,7 +1,24 @@
 import { computed, ref, watch } from 'vue'
+import { followSystem, themeMode } from './usePersist'
 import { followLight, followDark, currWallpapers } from './usePersist'
-import { themeMode } from './useTheme'
 import { getFile } from './useWallpaperFiles'
+
+export const themeSystemDark = ref(false)
+const mediaQM = window.matchMedia('(prefers-color-scheme: dark)')
+themeSystemDark.value = mediaQM.matches
+mediaQM.addEventListener('change', (e) => { themeSystemDark.value = e.matches })
+
+watch([followSystem, themeSystemDark], ([on, dark]) => {
+  if (on) themeMode.value = dark ? 'dark' : 'light'
+}, { immediate: true })
+
+watch(themeMode, (t) => {
+  document.documentElement.setAttribute('data-theme', t)
+}, { immediate: true })
+
+export function cycleTheme() {
+  themeMode.set(themeMode.value === 'light' ? 'dark' : 'light')
+}
 
 export const wpObjectUrls = ref({})
 export const wpMediaInfo = ref({ w: 0, h: 0 })
@@ -53,5 +70,6 @@ export const currentWallpaper = computed(() => {
 export function wpVideoKey() {
   const c = currentWallpaper.value
   if (!c) return ''
-  return c.kind === 'file' ? 'f-' + c.fileId : 'u-' + c.url
+  if (c.kind === 'url') return c.url || ''
+  return 'f-' + c.fileId
 }

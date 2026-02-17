@@ -1,14 +1,15 @@
 import { computed, ref, watch, onBeforeUnmount, nextTick } from 'vue'
-import { desktopAlign, videoOwner, displayMode } from './useVisualOwner'
-import { mediaVideoEl } from './usePlaybackState'
-import { containerW, containerH } from './useVisualContainer'
-import { mediaItemW, mediaItemH } from './useVideoElement'
+import { videoType } from './useSourceState.js'
+import { displayMode,desktopAlign } from './useVisualState'
+import { videoEl } from './useVideoElement'
+import { containerW, containerH } from './useVisualState'
+import { visualItemW, visualItemH } from './useVideoElement'
 import { getBlurBgCache } from './useBlurBg.js'
 
 export const tileVideoCount = ref(3)
 
 export const videoTileMode = computed(() => {
-  return (videoOwner.value === 'media' || videoOwner.value === 'wallpaper') && displayMode.value === 'tile'
+  return (videoType.value === 'media' || videoType.value === 'wallpaper') && displayMode.value === 'tile'
 })
 export const videoTileCount = computed(() => {
   if (!videoTileMode.value) return 1
@@ -21,8 +22,8 @@ export const videoTileArea = computed(() => ({
 }))
 
 export const videoTileScaled = computed(() => {
-  const lw = mediaItemW.value
-  const lh = mediaItemH.value
+  const lw = visualItemW.value
+  const lh = visualItemH.value
   const area = videoTileArea.value
   if (!lw || !lh || !area.w || !area.h) return null
   const vR = lw / lh
@@ -71,7 +72,7 @@ export const videoTileLayout = computed(() => {
 
 export const videoTileStyle = computed(() => {
   if (!videoTileMode.value) return {}
-  if (!mediaItemW.value || !mediaItemH.value) {
+  if (!visualItemW.value || !visualItemH.value) {
     return { position: 'absolute', visibility: 'hidden', pointerEvents: 'none' }
   }
   const base = {
@@ -110,7 +111,7 @@ let tileRafId = 0
 
 export function drawTileCanvas(tileCanvasRef) {
   const canvas = tileCanvasRef.value
-  const el = mediaVideoEl.value
+  const el = videoEl.value
   if (!canvas || !el || !el.isConnected) return
   if (!videoTileMode.value) return
 
@@ -133,7 +134,7 @@ export function drawTileCanvas(tileCanvasRef) {
   const totalW = layout.scaledW * layout.count
   const needSideBg = totalW < area.w - 0.5
   if (needTopBg || needSideBg) {
-    const blurCanvas = getBlurBgCache(el, mediaItemW.value, mediaItemH.value, cssW, cssH, dpr)
+    const blurCanvas = getBlurBgCache(el, visualItemW.value, visualItemH.value, cssW, cssH, dpr)
 
     ctx.save()
     ctx.beginPath()
@@ -166,11 +167,6 @@ export function startTileCanvas(tileCanvasRef) {
       tileRafId = 0; return
     }
     drawTileCanvas(tileCanvasRef)
-    const el = mediaVideoEl.value
-    if (el && el.ended) {
-      drawTileCanvas(tileCanvasRef)
-      tileRafId = 0; return
-    }
     tileRafId = requestAnimationFrame(tick)
   }
   tileRafId = requestAnimationFrame(tick)
@@ -189,7 +185,7 @@ export function setupTileCanvas(tileCanvasRef) {
   const cleanup = () => stopTileCanvas()
 
   const stop = watch(
-    [videoTileMode, () => videoTileCount.value, () => desktopAlign.value, mediaItemW, mediaItemH, () => videoTileArea.value.w, () => videoTileArea.value.h],
+    [videoTileMode, () => videoTileCount.value, () => desktopAlign.value, visualItemW, visualItemH, () => videoTileArea.value.w, () => videoTileArea.value.h],
     ([on]) => {
       if (on) {
         nextTick(() => {

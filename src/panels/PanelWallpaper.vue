@@ -16,11 +16,9 @@ import {
   themeMode,
   urlInput,
   currWallpapers,
-  wpVideoMuted
 } from '../js/usePersist'
-import { visualItem } from '../js/useVisualOwner'
-import { playbackResetForWallpaper } from '../js/usePlaybackActions'
-import { wpObjectUrls } from '../js/useWallpaper'
+import { mediaVisualItem } from '../js/useSourceState'
+import { wpObjectUrls } from '../js/useThemeWallpaper'
 import { mediaUrl } from '../utils/media'
 import { newFileId, putFile } from '../js/useWallpaperFiles'
 
@@ -74,7 +72,7 @@ const displayName = computed(() => {
 })
 
 const canReuseVisual = computed(() => {
-  const item = visualItem.value
+  const item = mediaVisualItem.value
   if (!item) return false
   if (item.type !== 'image' && item.type !== 'video') return false
   const url = mediaUrl(item)
@@ -82,12 +80,12 @@ const canReuseVisual = computed(() => {
   return !wpUrl || wpUrl !== url
 })
 const reuseVisualLabel = computed(() => {
-  const item = visualItem.value
+  const item = mediaVisualItem.value
   if (!item) return ''
   return item.type === 'image' ? t('reuseCurrentImage') : t('reuseCurrentVideo')
 })
 function reuseVisual() {
-  const item = visualItem.value
+  const item = mediaVisualItem.value
   if (!item) return
   const url = mediaUrl(item)
   if (!url) return
@@ -117,15 +115,6 @@ function clearWallpaper() {
   const next = { ...currWallpapers.value }
   next[side] = null
   currWallpapers.set(next)
-}
-function refreshWallpaper() {
-  const side = themeMode.value
-  const cur = currWallpapers.value[side]
-  if (!cur) return
-  const next = { ...currWallpapers.value }
-  next[side] = { ...cur, ts: Date.now() }
-  currWallpapers.set(next)
-  playbackResetForWallpaper()
 }
 function reuseOther() {
   const side = themeMode.value
@@ -233,15 +222,14 @@ watch(
 <style scoped>
 .ui-panel-tl { top: 12px; left: 12px; }
 .wp-url {
-  width: 196px;
+  width: 212px;
 }
 .wp-name {
-  width: 196px;
+  max-width: 212px;
   margin: 0;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .wp-name::-webkit-scrollbar {

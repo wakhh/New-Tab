@@ -1,131 +1,126 @@
 import { ref, watch, nextTick } from 'vue'
-import { mediaVideoMuted, mediaVideoVolume, wpVideoMuted, wpVideoVolume, wpVideoPlaying, videoLoop, visualPaused, audioPaused, mediaAudioVolume, mediaAudioMuted } from './usePersist'
-import { mediaVideoEl, mediaAudioEl, mediaVisualTimeDur, mediaAudioTimeDur, mediaVideoPlaying, mediaAudioPlaying } from './usePlaybackState'
-import { saveVideoProgress, saveAudioProgress } from './usePlaybackLifecycle'
-import { currentWallpaper, wpMediaInfo } from './useWallpaper'
-import { visualItem, videoOwner, displayMode, mediaActive } from './useVisualOwner'
+import {
+  sourceStates, visualSource, videoPaused,
+  mediaVideoMuted, mediaVideoVolume, wpVideoMuted, wpVideoVolume, videoLoop
+} from './usePersist'
+import { videoEl, videoElProgress, videoElDuration, videoPlaying } from './usePlaybackState'
+export { videoEl, videoElProgress, videoElDuration, videoPlaying }
+import { currentWallpaper, wpMediaInfo } from './useThemeWallpaper'
+import { displayMode } from './useVisualState'
+import { videoType, mediaVisualItem, mediaVisualOn } from './useSourceState'
 import { mediaUrl } from '../utils/media'
+import { saveVideoProgress, restoreVideoProgress, clearVideoProgress } from './useProgressStore'
+import { stopMediaImgTimer } from './useMediaImg'
 
-export const mediaItemW = ref(0)
-export const mediaItemH = ref(0)
-export const inited = ref(false)
-export const videoPosters = ref({ wallpaper: '', media: '' })
+export const visualItemW = ref(0)
+export const visualItemH = ref(0)
+export const videoSnapshots = ref({ wallpaper: '', media: '' })
 
-let _suppressVideoRefWrite = false
-
-export function syncVideoEls() {
-  const el = mediaVideoEl.value
-  if (!el) return
-  const owner = videoOwner.value
+function applyVideoProps(el, owner) {
   if (owner === 'media') {
     el.volume = mediaVideoVolume.value / 100
     el.muted = mediaVideoMuted.value
     el.loop = false
-    if (visualPaused.value) el.pause()
-    else el.play()?.catch(() => {})
   } else if (owner === 'wallpaper') {
     el.volume = wpVideoVolume.value / 100
     el.muted = wpVideoMuted.value
     el.loop = videoLoop.value
-    if (wpVideoPlaying.value) el.play()?.catch(() => {})
-    else el.pause()
   }
 }
 
-export function syncAudioEls(el) {
-  if (!el) el = mediaAudioEl.value
+function trySyncVideoPlay() {
+  const el = videoEl.value
   if (!el) return
-  el.volume = mediaAudioVolume.value / 100
-  el.muted = mediaAudioMuted.value
-  if (audioPaused.value) el.pause()
+  const wantPlay = !videoPaused.value
+  if (wantPlay) {
+    if (el.paused) el.play()?.catch(() => {})
+    videoPlaying.value = true
+  } else {
+    if (!el.paused) el.pause()
+    videoPlaying.value = false
+  }
+}
+
+function syncVideoEls() {
+  const el = videoEl.value
+  if (!el) return
+  const owner = videoType.value
+  applyVideoProps(el, owner)
+  if (videoPaused.value) el.pause()
   else el.play()?.catch(() => {})
 }
 
-export function bindMediaVideo(el) {
-  mediaVideoEl.value = el
+export function loadVisualVideo(item) {
+  if (!item || item.type !== 'video') return
+  stopMediaImgTimer()
+  const el = videoEl.value
+  const url = mediaUrl(item)
+  const sameEl = el && el.src && (el.src === url || el.src.endsWith(url))
+  if (!sameEl) {
+    videoElProgress.value = 0
+    videoElDuration.value = 0
+  }
+  if (!el) return
+  el.loop = false
 }
 
-watch(videoOwner, (owner, prevOwner) => {
-  _suppressVideoRefWrite = true
-  if (owner) {
-    if (!inited.value) inited.value = true
-    nextTick(() => {
-      const el = mediaVideoEl.value
-      if (el && prevOwner) {
-        const newSrc = owner === 'media' ? mediaUrl(visualItem.value) : currentWallpaper.value?.url
-        if (el.src === newSrc) {
-          const w = el.videoWidth || el.naturalWidth || 0
-          const h = el.videoHeight || el.naturalHeight || 0
-          if (owner === 'media') {
-            el.volume = mediaVideoVolume.value / 100
-            el.muted = mediaVideoMuted.value
-            el.loop = false
-            visualPaused.value = el.paused
-            mediaVisualTimeDur.value = el.duration || 0
-            if (w && h) mediaItemW.value = w; mediaItemH.value = h
-          } else {
-            el.volume = wpVideoVolume.value / 100
-            el.muted = wpVideoMuted.value
-            el.loop = videoLoop.value
-            wpVideoPlaying.value = !el.paused
-            if (w && h) { mediaItemW.value = w; mediaItemH.value = h; wpMediaInfo.value = { w, h } }
-          }
-          _suppressVideoRefWrite = false
-          return
-        }
-      }
-      syncVideoEls()
-      _suppressVideoRefWrite = false
-    })
-  } else {
-    _suppressVideoRefWrite = false
-  }
+watch(videoType, (owner, prevOwner) => {
+  if (!owner) return
+  nextTick(() => {
+    const curEl = videoEl.value
+    if (!curEl) return
+    const w = curEl.videoWidth || curEl.naturalWidth || 0
+    const h = curEl.videoHeight || curEl.naturalHeight || 0
+    applyVideoProps(curEl, owner)
+    if (owner === 'media') {
+      videoElDuration.value = curEl.duration || 0
+      if (w && h) visualItemW.value = w; visualItemH.value = h
+    } else {
+      if (w && h) { visualItemW.value = w; visualItemH.value = h; wpMediaInfo.value = { w, h } }
+    }
+    trySyncVideoPlay()
+  })
 }, { immediate: true })
 
-watch([visualPaused, mediaVideoVolume, mediaVideoMuted], () => {
-  const el = mediaVideoEl.value
-  if (!el || videoOwner.value !== 'media') return
+watch([videoPaused, mediaVideoVolume, mediaVideoMuted], () => {
+  const el = videoEl.value
+  if (!el || videoType.value !== 'media') return
   el.volume = mediaVideoVolume.value / 100
   el.muted = mediaVideoMuted.value
   el.loop = false
-  if (visualPaused.value) el.pause()
+  if (videoPaused.value) el.pause()
   else el.play()?.catch(() => {})
 })
 
-watch([wpVideoPlaying, wpVideoVolume, wpVideoMuted, videoLoop], () => {
-  const el = mediaVideoEl.value
-  if (!el || videoOwner.value !== 'wallpaper') return
+watch([videoPaused, wpVideoVolume, wpVideoMuted, videoLoop], () => {
+  const el = videoEl.value
+  if (!el || videoType.value !== 'wallpaper') return
   el.volume = wpVideoVolume.value / 100
   el.muted = wpVideoMuted.value
   el.loop = videoLoop.value
-  if (wpVideoPlaying.value) el.play()?.catch(() => {})
-  else el.pause()
+  if (videoPaused.value) el.pause()
+  else el.play()?.catch(() => {})
 })
 
 watch(
-  mediaVideoEl,
+  videoEl,
   (el) => {
     if (!el) return
     el.addEventListener('timeupdate', saveVideoProgress)
-    el.addEventListener('loadedmetadata', () => { mediaVisualTimeDur.value = el.duration || 0 })
-    const syncPlayState = () => {
-      const playing = !el.paused
-      mediaVideoPlaying.value = playing
-      if (_suppressVideoRefWrite) return
-      const owner = videoOwner.value
-      if (owner === 'media') visualPaused.value = !playing
-      else if (owner === 'wallpaper') wpVideoPlaying.value = playing
-    }
+    el.addEventListener('loadedmetadata', () => {
+      videoElDuration.value = el.duration || 0
+      restoreVideoProgress(el)
+    })
+    el.addEventListener('loadeddata', trySyncVideoPlay)
+    el.addEventListener('canplay', trySyncVideoPlay)
+    el.addEventListener('playing', () => { videoPlaying.value = true })
+    const syncPlayState = () => { videoPlaying.value = !el.paused }
     el.addEventListener('play', syncPlayState)
     el.addEventListener('pause', syncPlayState)
-    el.addEventListener('ended', () => {
-      mediaVideoPlaying.value = false
-    })
-    el.addEventListener('error', () => {
-      mediaVideoPlaying.value = false
-    })
+    el.addEventListener('ended', () => { videoPlaying.value = false })
+    el.addEventListener('error', () => { videoPlaying.value = false })
     el.addEventListener('volumechange', () => {
-      const owner = videoOwner.value
+      const owner = videoType.value
       if (owner === 'media') {
         mediaVideoVolume.value = Math.round(el.volume * 100)
         mediaVideoMuted.value = el.muted
@@ -139,47 +134,20 @@ watch(
 )
 
 watch(
-  mediaAudioEl,
-  (el) => {
-    if (!el) return
-    const syncPlayState = () => {
-      const playing = !el.paused
-      mediaAudioPlaying.value = playing
-      audioPaused.value = !playing
-    }
-    el.addEventListener('timeupdate', saveAudioProgress)
-    el.addEventListener('loadedmetadata', () => { mediaAudioTimeDur.value = el.duration || 0 })
-    el.addEventListener('play', syncPlayState)
-    el.addEventListener('pause', syncPlayState)
-    el.addEventListener('ended', () => {
-      mediaAudioPlaying.value = false
-    })
-    el.addEventListener('error', () => {
-      mediaAudioPlaying.value = false
-    })
-    el.addEventListener('volumechange', () => {
-      mediaAudioVolume.value = Math.round(el.volume * 100)
-      mediaAudioMuted.value = el.muted
-    })
-    syncAudioEls(el)
-  }
-)
-
-watch(
   () => currentWallpaper.value?.url,
   () => {
-    if (!mediaActive.value) {
-      mediaItemW.value = 0
-      mediaItemH.value = 0
+    if (!mediaVisualOn.value) {
+      visualItemW.value = 0
+      visualItemH.value = 0
     }
-    videoPosters.value = { ...videoPosters.value, wallpaper: '', wallpaper_url: '' }
+    videoSnapshots.value = { ...videoSnapshots.value, wallpaper: '', wallpaper_url: '' }
     if (currentWallpaper.value?.isVideo && displayMode.value === 'stretch') {
       displayMode.value = 'fill'
     }
   }
 )
 
-watch(visualItem, (newItem, oldItem) => {
+watch(mediaVisualItem, (newItem, oldItem) => {
   const newUrl = newItem ? mediaUrl(newItem) : null
   const oldUrl = oldItem ? mediaUrl(oldItem) : null
   const wpUrl = currentWallpaper.value?.url
@@ -187,20 +155,56 @@ watch(visualItem, (newItem, oldItem) => {
   const toWp = !newItem && wpIsVideo && oldUrl === wpUrl
   const toMedia = !oldItem && newUrl && wpIsVideo && newUrl === wpUrl
   if (toWp || toMedia) {
-    videoPosters.value = { ...videoPosters.value, media: '', media_url: '' }
+    videoSnapshots.value = { ...videoSnapshots.value, media: '', media_url: '' }
     return
   }
-  mediaItemW.value = 0
-  mediaItemH.value = 0
-  videoPosters.value = { ...videoPosters.value, media: '', media_url: '' }
+  visualItemW.value = 0
+  visualItemH.value = 0
+  videoSnapshots.value = { ...videoSnapshots.value, media: '', media_url: '' }
 })
 
 watch(
-  () => [videoOwner.value, displayMode.value],
+  () => [videoType.value, displayMode.value],
   ([owner, dm]) => {
     if (owner === 'media' && dm === 'stretch') displayMode.value = 'fill'
   },
   { immediate: true }
 )
 
-export * from './useVideoCallbacks'
+watch(
+  [visualSource, () => mediaVisualItem.value],
+  ([newKey]) => {
+    if (!newKey) { stopMediaImgTimer(); return }
+    const src = newKey.src
+    const type = newKey.type
+    const item = sourceStates[src]?.[type]?.selectedItem.value
+    if (!item) return
+    if (type === 'video') loadVisualVideo(item)
+    else if (type === 'image') {
+      videoEl.value?.pause()
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => {
+    const owner = videoType.value
+    if (owner === 'wallpaper') {
+      const c = currentWallpaper.value
+      return { owner, url: c?.isVideo ? c.url || null : null }
+    }
+    if (owner === 'media' && mediaVisualItem.value) {
+      return { owner, url: mediaUrl(mediaVisualItem.value) || null }
+    }
+    return { owner, url: null }
+  },
+  (cur, prev) => {
+    if (!cur || !prev) return
+    if (cur.owner !== prev.owner) return
+    if (!cur.url || !prev.url || cur.url === prev.url) return
+    clearVideoProgress()
+    const el = videoEl.value
+    if (el) el.currentTime = 0
+  }
+)

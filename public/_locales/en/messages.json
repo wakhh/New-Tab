@@ -1,0 +1,6 @@
+{
+  "appName": { "message": "Personal New Tab" },
+  "appDesc": { "message": "Personalized new tab with wallpaper and icon management" },
+  "actionTitle": { "message": "Open New Tab" },
+  "cmdOpenNewtabDesc": { "message": "Open new tab popup" }
+}

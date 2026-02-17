@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { isPortrait } from '../js/useViewport'
+import { isPortrait } from '../js/useVisualState'
 
 const props = defineProps({
   id: { type: String, default: '' },
@@ -9,7 +9,7 @@ const props = defineProps({
   showShortcut: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update:modelValue', 'enter'])
+const emit = defineEmits(['update:modelValue', 'enter', 'blur'])
 
 const shortcutText = computed(() => props.showShortcut && !isPortrait.value ? props.showShortcut : '')
 </script>
@@ -24,6 +24,7 @@ const shortcutText = computed(() => props.showShortcut && !isPortrait.value ? pr
       :placeholder="placeholder"
       @input="emit('update:modelValue', $event.target.value)"
       @keydown.enter.prevent.stop="emit('enter')"
+      @blur="emit('blur')"
     />
     <template v-if="shortcutText">(<u>{{ shortcutText }}</u>)</template>
   </span>

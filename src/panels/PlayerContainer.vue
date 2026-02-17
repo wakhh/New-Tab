@@ -1,100 +1,258 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import {
-  optimize,
-  mediaAudioMuted,
+  mediaMusicMuted,
   mediaVideoMuted, wpVideoMuted,
-   videoLoop, visualPaused, wpVideoPlaying
+  videoLoop, videoPaused, musicPaused, visualSource,
+  _desktopAlignImage, _desktopAlignVideo, optimize
 } from '../js/usePersist'
-import { containerW, containerH } from '../js/useVisualContainer'
-import { handleError, onAudioEnded } from '../js/usePlaybackLifecycle'
-import { currentWallpaper } from '../js/useWallpaper'
-import { mediaUrl } from '../utils/media'
-import { floatIcon } from '../js/useFloatIcon'
-import '../js/usePlayerSync'
+import { containerW, containerH, isPortrait, displayMode,
+  desktopAlign, desktopAnchor } from '../js/useVisualState'
+import { currentWallpaper, wpMediaInfo } from '../js/useThemeWallpaper'
+import { mediaUrl, sourceOf } from '../utils/media'
 import {
-  visualItem, slideshowOn, mediaActive,
-  videoOwner, imageOwner, visualIsVideo, visualIsImage, displayMode,
-  desktopAlign, desktopAnchor
-} from '../js/useVisualOwner'
-import { audioItem } from '../js/useAudioOwner'
+  mediaVisualItem, mediaVisualOn,
+  videoType, imgType, videoOn, imageOn, musicItem
+} from '../js/useSourceState'
 import {
-  mediaItemW, mediaItemH, inited, videoPosters,
-  bindMediaVideo, bindAudioEl,
-  onMediaLoad, onVideoEndedLocal, onVideoTimeUpdate,
-  onVideoError, onImageError
+  visualItemW, visualItemH, videoSnapshots, videoEl
 } from '../js/useVideoElement'
-import { playbackToggle } from '../js/usePlaybackActions'
-import { showFloatIcon } from '../js/useFloatIcon'
-import { onLayerWheel } from '../js/useViewportInput'
+import { musicEl } from '../js/useAudioElement'
+import { getMode, MODES } from '../js/usePlayMode'
+import { pickNextItem, navigate } from '../js/useItemNav'
+import { stopSource } from '../js/useSourceHelpers'
+import { onLayerWheel as tileOnLayerWheel } from '../js/useLayerWheel'
+import { scale, tx, ty, resetZoom, imgNatural, imgBaseRect } from '../js/useImageZoom'
+import { handleLayerWheel as interactHandleLayerWheel, onLayerMouseDown, onLayerClick as interactOnLayerClick } from '../js/useImageInteract'
 import {
   videoTileMode, videoTileStyle, tileCanvasStyle,
   setupTileCanvas, onVisChange as tileOnVisChange
 } from '../js/useTileLayout'
-import { mediaVideoEl } from '../js/usePlaybackState'
-import { getBlurBgCache, startVideoBlurLoop, stopVideoBlurLoop, resetBlurBgCache } from '../js/useBlurBg.js'
+import { showDynamicBlur, getBlurSrc, startFitBlurLoop as _startFitBlurLoop, stopFitBlurLoop, onVisChange as _onVisChange, resetBlurBgCache } from '../js/useBlurBg'
+
+function bindVideoEl(el) {
+  videoEl.value = el
+}
+
+function bindMusicEl(el) {
+  musicEl.value = el
+}
+
+function captureVideoFrame(el, owner) {
+  if (!el || el.readyState < 2) return
+  const w = el.videoWidth, h = el.videoHeight
+  if (!w || !h) return
+  const url = el.getAttribute('src')
+  if (!url) return
+  requestAnimationFrame(() => {
+    if (videoSnapshots.value[owner] && videoSnapshots.value[owner + '_url'] === url) return
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.drawImage(el, 0, 0, w, h)
+      videoSnapshots.value = {
+        ...videoSnapshots.value,
+        [owner]: canvas.toDataURL('image/jpeg', 0.7),
+        [owner + '_url']: url
+      }
+    } catch (e) {}
+  })
+}
+
+function onMediaLoad(e) {
+  const el = e?.target
+  if (!el) return
+  const w = el.videoWidth || el.naturalWidth || 0
+  const h = el.videoHeight || el.naturalHeight || 0
+  visualItemW.value = w; visualItemH.value = h; wpMediaInfo.value = { w, h }
+  if (videoType.value === 'media' && mediaVisualItem.value?.type === 'video') captureVideoFrame(el, 'media')
+  if (currentWallpaper.value?.isVideo) captureVideoFrame(el, 'wallpaper')
+}
+
+function _handleEnded(type, item) {
+  if (!item) return
+  const source = sourceOf(item)
+  const mode = getMode(source)
+  if (mode === MODES.SINGLE_LOOP) {
+    const el = type === 'music' ? musicEl.value : videoEl.value
+    if (el) { el.currentTime = 0; el.play()?.catch(() => {}) }
+    return
+  }
+  const target = pickNextItem(source, item, null, mode)
+  if (!target) {
+    if (mode === MODES.SINGLE_PLAY) { stopSource(source); return }
+    navigate(source, null)
+    return
+  }
+  navigate(source, target)
+}
+
+function _handleError(type, item) {
+  if (!item) return
+  const source = sourceOf(item)
+  const mode = getMode(source)
+  if (mode === MODES.SINGLE_PLAY || mode === MODES.SINGLE_LOOP) { stopSource(source); return }
+  _handleEnded(type, item)
+}
+
+function onVideoEndedLocal(e) {
+  const el = e?.target || videoEl.value
+  if (el && el.currentTime === 0 && (el.duration === 0 || el.readyState < 2)) return
+  const owner = videoType.value
+  if (owner === 'media') _handleEnded('video', mediaVisualItem.value)
+}
+
+function onVideoError() {
+  if (videoType.value === 'media') _handleError('video', mediaVisualItem.value)
+}
+
+function onImageError() {
+  if (mediaVisualItem.value?.type === 'image') _handleError('image', mediaVisualItem.value)
+}
+
+function onMusicEnded() {
+  if (musicItem.value) _handleEnded('music', musicItem.value)
+}
 
 const tileCanvasRef = ref(null)
 const fitBlurCanvasRef = ref(null)
+const imgElRef = ref(null)
+const layerEl = ref(null)
+
+const imgZoomWrapStyle = computed(() => {
+  const isimgType = imgType.value === 'media' || imgType.value === 'wallpaper'
+  if (!isimgType) return ''
+  const r = imgBaseRect.value
+  return {
+    position: 'absolute',
+    left: r.x + 'px',
+    top: r.y + 'px',
+    width: r.w + 'px',
+    height: r.h + 'px',
+    transform: `translate(${tx.value}px, ${ty.value}px) scale(${scale.value})`,
+    transformOrigin: '0 0'
+  }
+})
+
+function handleLayerWheel(e) {
+  if (interactHandleLayerWheel(e) === true) tileOnLayerWheel(e)
+}
+
+function _windowWheelCapture(e) {
+  if (e.ctrlKey) {
+    e.preventDefault()
+    const layer = layerEl.value
+    if (!layer) return
+    const t = e.target
+    if (t && typeof t.closest === 'function') {
+      if (t.closest('.icon-cell')) return
+      if (t.closest('.ctx-menu')) return
+      if (t.closest('.dialog-overlay')) return
+      if (t.closest('.ui-panel')) return
+      if (t.closest('.float-icon')) return
+    }
+    if (interactHandleLayerWheel(e, layer) === true) tileOnLayerWheel(e)
+    return
+  }
+  const t = e.target
+  if (t && typeof t.closest === 'function') {
+    if (t.closest('.icon-cell')) return
+    if (t.closest('.ctx-menu')) return
+    if (t.closest('.dialog-overlay')) return
+    if (t.closest('.ui-panel')) return
+    if (t.closest('.float-icon')) return
+  }
+  const layer = layerEl.value
+  if (!layer) return
+  if (interactHandleLayerWheel(e, layer) === true) tileOnLayerWheel(e)
+}
+
+function _windowMouseDownCapture(e) {
+  if (e.button !== 0) return
+  const t = e.target
+  if (t && typeof t.closest === 'function') {
+    if (t.closest('.icon-cell')) return
+    if (t.closest('.ctx-menu')) return
+    if (t.closest('.dialog-overlay')) return
+    if (t.closest('.ui-panel')) return
+    if (t.closest('.float-icon')) return
+  }
+  const layer = layerEl.value
+  if (!layer) return
+  onLayerMouseDown(e, layer)
+}
+
+function onLayerClick(e) { interactOnLayerClick(e) }
 
 const displayClass = computed(() => 'mode-' + displayMode.value)
 
+function onImgLoad() {
+  const el = imgElRef.value
+  if (!el) return
+  const w = el.naturalWidth
+  const h = el.naturalHeight
+  imgNatural.value = { w, h }
+  if (mediaVisualOn.value && imageOn.value) {
+    visualItemW.value = w
+    visualItemH.value = h
+  } else if (imgType.value === 'wallpaper') {
+    wpMediaInfo.value = { w, h }
+  }
+}
+
 const videoSrc = computed(() => {
-  const owner = videoOwner.value
-  if (owner === 'media') return mediaUrl(visualItem.value)
+  const owner = videoType.value
+  if (owner === 'media') return mediaUrl(mediaVisualItem.value)
   if (owner === 'wallpaper') return currentWallpaper.value.url
   return ''
 })
 const videoMuted = computed(() => {
-  const owner = videoOwner.value
+  const owner = videoType.value
   if (owner === 'media') return mediaVideoMuted.value
   if (owner === 'wallpaper') return wpVideoMuted.value
   return true
 })
 const videoElemLoop = computed(() => {
-  const owner = videoOwner.value
+  const owner = videoType.value
   if (owner === 'wallpaper') return videoLoop.value
   return false
 })
 
 setupTileCanvas(tileCanvasRef)
 
-const onAudioError = () => handleError('music', audioItem.value)
-
-function toggleVideoClick(e) {
-  const owner = videoOwner.value
-  let target = null
-  let isPlaying = null
-  if (owner === 'media' || slideshowOn.value) {
-    target = 'media-visual'
-    isPlaying = !visualPaused.value
-  } else if (owner === 'wallpaper') {
-    target = 'wp-video'
-    isPlaying = wpVideoPlaying.value
-  }
-  if (target) {
-    playbackToggle(target, { skipIcon: true })
-    const icon = isPlaying ? '▶' : '⏸'
-    showFloatIcon(icon, e.clientX, e.clientY)
-  }
-}
+const onMusicError = () => _handleError('music', musicItem.value)
 
 const tileSrc = ref('')
 
-function tileLayerStyle(src) {
+const tileLayerStyle = computed(() => {
+  const src = tileSrc.value
   if (!src) return {}
+  const useContain = optimize.value
+  let bgSize = 'auto'
+  if (useContain) {
+    const iw = imgNatural.value.w
+    const ih = imgNatural.value.h
+    const cw = containerW.value
+    const ch = containerH.value
+    if (iw && ih && cw && ch) {
+      const scale = Math.min(cw / iw, ch / ih)
+      bgSize = `${Math.round(iw * scale)}px ${Math.round(ih * scale)}px`
+    }
+  }
   return {
     backgroundImage: `url(${src})`,
     backgroundRepeat: 'repeat',
-    backgroundPosition: optimize.value ? 'center top' : 'left top',
-    backgroundSize: optimize.value ? 'contain' : 'auto'
+    backgroundPosition: useContain ? 'center' : '0 0',
+    backgroundSize: bgSize
   }
-}
+})
 
 watch(
   () => {
-    if (mediaActive.value) {
-      return visualIsImage.value && displayMode.value === 'tile' ? mediaUrl(visualItem.value) : ''
+    if (mediaVisualOn.value) {
+      return imageOn.value && displayMode.value === 'tile' ? mediaUrl(mediaVisualItem.value) : ''
     }
     const c = currentWallpaper.value
     return c && !c.isVideo && displayMode.value === 'tile' ? c.url : ''
@@ -103,7 +261,12 @@ watch(
   { immediate: true }
 )
 
-function getLayerStyle() {
+watch(desktopAlign, () => {
+  tileSrc.value = tileSrc.value ? tileSrc.value + ' ' : tileSrc.value
+  tileSrc.value = tileSrc.value.trim()
+})
+
+const layerStyle = computed(() => {
   if (!desktopAlign.value) return {}
   const w = containerW.value
   const h = containerH.value
@@ -114,106 +277,28 @@ function getLayerStyle() {
     case 'rt': return { ...area, right: 0, top: 0 }
     default: return { ...area, right: 0, bottom: 0 }
   }
-}
-
-function _canSkipBlur() {
-  const lw = mediaItemW.value
-  const lh = mediaItemH.value
-  const cw = containerW.value
-  const ch = containerH.value
-  if (!lw || !lh || !cw || !ch) return false
-  if (displayMode.value === 'fit') {
-    return Math.abs(lw / lh - cw / ch) < 1e-4
-  }
-  if (displayMode.value === 'center') {
-    return lw >= cw && lh >= ch
-  }
-  return false
-}
-
-function getShowBlur() {
-  if (!optimize.value) return false
-  const m = displayMode.value
-  if (m !== 'fit' && m !== 'center') return false
-  if (_canSkipBlur()) return false
-  if (mediaActive.value) {
-    if (visualIsVideo.value) return !!(videoPosters.value.media || videoPosters.value.media_url)
-    return mediaItemW.value > 0 || mediaItemH.value > 0
-  }
-  if (currentWallpaper.value?.isVideo) return !!videoPosters.value.wallpaper
-  return currentWallpaper.value && (mediaItemW.value > 0 || mediaItemH.value > 0)
-}
-
-const showDynamicBlur = computed(() => {
-  if (!optimize.value) return false
-  const m = displayMode.value
-  if (m !== 'fit' && m !== 'center') return false
-  if (_canSkipBlur()) return false
-  if (mediaActive.value) return visualIsVideo.value
-  return !!currentWallpaper.value?.isVideo
 })
 
-function getBlurSrc() {
-  if (!getShowBlur()) return ''
-  if (mediaActive.value) {
-    if (visualIsVideo.value) return videoPosters.value.media || videoPosters.value.media_url
-    return visualIsImage.value ? mediaUrl(visualItem.value) : ''
-  }
-  return currentWallpaper.value?.isVideo ? videoPosters.value.wallpaper : currentWallpaper.value?.url || ''
-}
+function startFitBlurLoop() { _startFitBlurLoop(fitBlurCanvasRef.value) }
+function onVisChange() { _onVisChange(tileOnVisChange, tileCanvasRef) }
 
 const imgSrc = ref('')
 
 watch(
   () => {
-    if (imageOwner.value === 'slideshow') return { kind: 'slideshow', src: mediaUrl(visualItem.value) }
-    if (imageOwner.value === 'wallpaper') return { kind: 'wallpaper', src: currentWallpaper.value.url }
+    if (imgType.value === 'media') return { kind: 'media-img', src: mediaUrl(mediaVisualItem.value) }
+    if (imgType.value === 'wallpaper') return { kind: 'wallpaper', src: currentWallpaper.value.url }
     return null
   },
   (disp) => { imgSrc.value = disp?.src || '' },
   { immediate: true }
 )
 
-function onVisChange() {
-  tileOnVisChange(tileCanvasRef)
-  if (document.hidden) stopVideoBlurLoop()
-  else if (showDynamicBlur.value) startFitBlurLoop()
-}
+watch([() => mediaVisualItem.value, () => imgType.value, () => currentWallpaper.value?.url, () => displayMode.value], () => {
+  resetZoom()
+})
 
-function startFitBlurLoop() {
-  const canvas = fitBlurCanvasRef.value
-  const el = mediaVideoEl.value
-  if (!canvas || !el) {
-    nextTick(() => {
-      if (showDynamicBlur.value) startFitBlurLoop()
-    })
-    return
-  }
-  const dpr = Math.min(window.devicePixelRatio || 1, 2)
-  const cssW = Math.round(containerW.value)
-  const cssH = Math.round(containerH.value)
-  if (canvas.width !== cssW * dpr) canvas.width = cssW * dpr
-  if (canvas.height !== cssH * dpr) canvas.height = cssH * dpr
-  const ctx = canvas.getContext('2d')
-  startVideoBlurLoop(el, () => {
-    if (!showDynamicBlur.value) return
-    const w = Math.round(containerW.value)
-    const h = Math.round(containerH.value)
-    const d = Math.min(window.devicePixelRatio || 1, 2)
-    if (canvas.width !== w * d) canvas.width = w * d
-    if (canvas.height !== h * d) canvas.height = h * d
-    const blur = getBlurBgCache(el, mediaItemW.value, mediaItemH.value, w, h, d)
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.drawImage(blur, 0, 0)
-  })
-}
-
-function stopFitBlurLoop() {
-  stopVideoBlurLoop()
-}
-
-watch([showDynamicBlur, fitBlurCanvasRef, mediaVideoEl], ([on]) => {
+watch([showDynamicBlur, fitBlurCanvasRef, videoEl], ([on]) => {
   resetBlurBgCache()
   if (on) startFitBlurLoop()
   else stopFitBlurLoop()
@@ -221,23 +306,27 @@ watch([showDynamicBlur, fitBlurCanvasRef, mediaVideoEl], ([on]) => {
 
 onMounted(() => {
   document.addEventListener('visibilitychange', onVisChange)
+  document.addEventListener('wheel', _windowWheelCapture, { capture: true, passive: false })
+  window.addEventListener('mousedown', _windowMouseDownCapture, { capture: true })
 })
 onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onVisChange)
+  document.removeEventListener('wheel', _windowWheelCapture, { capture: true })
+  window.removeEventListener('mousedown', _windowMouseDownCapture, { capture: true })
   stopFitBlurLoop()
 })
 </script>
 
 <template>
-  <div ref="layerEl" class="player-container" :style="getLayerStyle()" @wheel="onLayerWheel" @click="toggleVideoClick">
+  <div ref="layerEl" class="player-container" :style="layerStyle" @click="onLayerClick">
     <canvas v-if="showDynamicBlur" ref="fitBlurCanvasRef" class="fit-blur-canvas"></canvas>
     <div v-else-if="getBlurSrc()" class="blur-fill">
       <img :src="getBlurSrc()" draggable="false" />
     </div>
 
-    <div v-if="inited" class="video-tile-wrap" :class="{ 'video-tile-wrap--active': videoTileMode }">
+    <div v-show="videoSrc" class="video-tile-wrap" :class="{ 'video-tile-wrap--active': videoTileMode }">
       <video
-        :ref="bindMediaVideo"
+        :ref="bindVideoEl"
         :class="displayClass"
         :style="videoTileStyle"
         :muted="videoMuted"
@@ -249,41 +338,31 @@ onBeforeUnmount(() => {
         controlslist="nodownload nofullscreen noremoteplayback"
         draggable="false"
         @loadeddata="onMediaLoad"
-        @loadedmetadata="onVideoTimeUpdate"
-        @timeupdate="onVideoTimeUpdate"
         @ended="onVideoEndedLocal"
         @error="onVideoError"
       ></video>
       <canvas v-if="videoTileMode" ref="tileCanvasRef" class="video-tile-canvas" :style="tileCanvasStyle"></canvas>
     </div>
 
-    <audio :ref="bindAudioEl" class="media-audio" :src="audioItem ? mediaUrl(audioItem) : ''" :muted="mediaAudioMuted" @ended="onAudioEnded" @error="onAudioError" />
+    <audio :ref="bindMusicEl" class="media-music" :src="musicItem ? mediaUrl(musicItem) : ''" :muted="mediaMusicMuted" @ended="onMusicEnded" @error="onMusicError" />
 
-    <div v-show="imageOwner === 'wallpaper' || imageOwner === 'slideshow'" class="img-stack">
-      <img
-        :src="imgSrc"
-        :class="displayClass"
-        class="img-fade"
-        draggable="false"
-        @load="onMediaLoad"
-        @error="onImageError"
-      />
+    <div v-show="(imgType === 'wallpaper' || imgType === 'media') && displayMode !== 'tile'" class="img-stack">
+      <div :style="imgZoomWrapStyle">
+        <img
+          ref="imgElRef"
+          :src="imgSrc"
+          class="img-fade"
+          draggable="false"
+          @load="onImgLoad"
+          @error="onImageError"
+        />
+      </div>
     </div>
 
     <div v-show="tileSrc" class="tile-stack">
-      <div class="tile-bg" :style="tileLayerStyle(tileSrc)" />
+      <div class="tile-bg" :style="tileLayerStyle" />
     </div>
 
-    <Transition name="float-icon">
-      <div
-        v-if="floatIcon"
-        class="float-icon"
-        :key="floatIcon.key"
-        :style="{ left: floatIcon.x + 'px', top: floatIcon.y + 'px' }"
-      >
-        {{ floatIcon.icon }}
-      </div>
-    </Transition>
   </div>
 </template>
 
@@ -311,23 +390,18 @@ onBeforeUnmount(() => {
   inset: 0;
 }
 
-.img-fade,
+.img-fade {
+  width: 100%;
+  height: 100%;
+  display: block;
+  transition: none;
+}
+
 .tile-bg {
   position: absolute;
   inset: 0;
   transition: none;
-}
-
-.mode-fill {
-  object-fit: cover;
-}
-
-.mode-fit {
-  object-fit: contain;
-}
-
-.mode-stretch {
-  object-fit: fill;
+  transform-origin: 0 0;
 }
 
 .video-tile-wrap {
@@ -346,6 +420,18 @@ onBeforeUnmount(() => {
   inset: 0;
   display: block;
   z-index: 1;
+}
+
+.mode-fill {
+  object-fit: cover;
+}
+
+.mode-fit {
+  object-fit: contain;
+}
+
+.mode-stretch {
+  object-fit: fill;
 }
 
 .mode-center {
@@ -383,31 +469,7 @@ onBeforeUnmount(() => {
 .player-container video {
   pointer-events: none;
 }
-.player-container .media-audio {
+.player-container .media-music {
   display: none;
-}
-.float-icon {
-  position: fixed;
-  transform: translate(-50%, -50%);
-  font-size: 72px;
-  color: var(--panel-text);
-  text-shadow: -1px -1px 0 var(--panel-bg), 1px -1px 0 var(--panel-bg), -1px 1px 0 var(--panel-bg), 1px 1px 0 var(--panel-bg), 0 2px 12px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-  z-index: 100;
-  line-height: 1;
-}
-.float-icon-enter-active {
-  transition: opacity 200ms ease, transform 200ms ease;
-}
-.float-icon-leave-active {
-  transition: opacity 300ms ease, transform 300ms ease;
-}
-.float-icon-enter-from {
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.6);
-}
-.float-icon-leave-to {
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(1.2);
 }
 </style>

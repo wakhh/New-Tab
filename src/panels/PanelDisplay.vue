@@ -7,12 +7,23 @@ import UiCheck from '../ui/UiCheck.vue'
 import UiText from '../ui/UiText.vue'
 import { t } from '../js/useI18n'
 import { optimize } from '../js/usePersist'
-import { desktopAlign, desktopAnchor, visualIsVideo, mediaActive, visualOwner, displayMode } from '../js/useVisualOwner'
-import { maximized, viewportW, viewportH } from '../js/useViewport'
-import { screenW, screenH } from '../js/useScreen'
-import { containerW, containerH } from '../js/useVisualContainer'
-import { currentWallpaper } from '../js/useWallpaper'
-import { viewportRatio, areaRatio, curW, curH, curRatio, isVideoSource, curExcess, setDisplayMode } from '../js/useLayoutMode'
+import { displayMode, desktopAlign, desktopAnchor } from '../js/useVisualState'
+import { videoOn, mediaVisualOn, visualType } from '../js/useSourceState'
+import { maximized, viewportW, viewportH ,screenW, screenH, containerW, containerH } from '../js/useVisualState'
+import { currentWallpaper } from '../js/useThemeWallpaper'
+import { viewportRatio, areaRatio, curW, curH, curRatio, isvideoType, curExcess, setDisplayMode } from '../js/useLayoutMode'
+import { tileVideoCount } from '../js/useTileLayout'
+
+const _SUPERSCRIPT = ['⁰','¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹']
+function _toSuperscript(n) {
+  return String(n).split('').map(d => _SUPERSCRIPT[+d] || d).join('')
+}
+
+const tileLabel = computed(() => {
+  const base = t('modeTile')
+  if (!isvideoType.value || tileVideoCount.value <= 1) return base
+  return base + _toSuperscript(tileVideoCount.value)
+})
 
 
 const areaInfo = computed(() => `${containerW.value} x ${containerH.value}`)
@@ -23,7 +34,7 @@ const viewportAreaDiffers = computed(() => {
 })
 
 const curTypeKey = computed(() => {
-  const kind = visualOwner.value === 'media-video' || visualOwner.value === 'wallpaper-video'
+  const kind = visualType.value === 'media-video' || visualType.value === 'wallpaper-video'
     ? 'video'
     : 'image'
   const dir = curRatio.value === 'portrait' ? 'portrait' : curRatio.value === 'landscape' ? 'landscape' : ''
@@ -31,10 +42,10 @@ const curTypeKey = computed(() => {
 })
 
 const displayOptions = computed(() =>
-  ['fill', 'fit', 'center', 'tile', 'stretch'].map((m) => ({
+  ['fill', 'fit', 'center', 'stretch', 'tile'].map((m) => ({
     value: m,
-    label: t('mode' + m.charAt(0).toUpperCase() + m.slice(1)),
-    disabled: isVideoSource.value && m === 'stretch'
+    label: m === 'tile' ? tileLabel.value : t('mode' + m.charAt(0).toUpperCase() + m.slice(1)),
+    disabled: isvideoType.value && m === 'stretch'
   }))
 )
 
@@ -65,7 +76,7 @@ const cornerOptions = computed(() =>
       </UiText>
     </UiRow>
 
-    <UiRow v-if="currentWallpaper || mediaActive">
+    <UiRow v-if="currentWallpaper || mediaVisualOn">
       <UiText>
         {{ t(curTypeKey) }}
         {{ curInfo }}
@@ -73,11 +84,11 @@ const cornerOptions = computed(() =>
       </UiText>
     </UiRow>
 
-    <UiRow v-if="(currentWallpaper || mediaActive) && viewportRatio === 'landscape' && maximized && viewportAreaDiffers">
+    <UiRow v-if="(currentWallpaper || mediaVisualOn) && viewportRatio === 'landscape' && maximized && viewportAreaDiffers">
       <UiCheck
         id="wallpaper-desktop-align"
         v-model="desktopAlign"
-        :label="t(visualIsVideo ? 'desktopAlignVideo' : 'desktopAlignImage')"
+        :label="t(videoOn ? 'desktopAlignVideo' : 'desktopAlignImage')"
       />
       <UiSwitch
         :options="cornerOptions"
@@ -87,7 +98,7 @@ const cornerOptions = computed(() =>
       />
     </UiRow>
 
-    <UiRow v-if="currentWallpaper || mediaActive">
+    <UiRow v-if="currentWallpaper || mediaVisualOn">
       <UiSwitch
         :options="displayOptions"
         :model-value="displayMode"

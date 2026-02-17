@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "个人新标签页",
   "version": "0.1.0",
-  "description": "Personal new tab with wallpaper management",
+  "name": "__MSG_appName__",
+  "description": "__MSG_appDesc__",
+  "default_locale": "en",
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   },
-  "permissions": ["storage", "unlimitedStorage", "windows"],
+  "permissions": ["storage", "unlimitedStorage", "windows", "tabs"],
   "host_permissions": ["<all_urls>"],
   "web_accessible_resources": [
     {
@@ -18,14 +19,39 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "打开独立窗口"
+    "default_title": "__MSG_actionTitle__",
+    "default_popup": "newtab.html?src=popup",
+    "default_icon": {
+      "16": "icons/light-icon.png",
+      "32": "icons/light-icon.png",
+      "48": "icons/light-icon.png",
+      "128": "icons/light-icon.png"
+    },
+    "theme_icons": [{
+      "light": "icons/dark-icon.png",
+      "dark": "icons/light-icon.png",
+      "size": 16
+    }, {
+      "light": "icons/dark-icon.png",
+      "dark": "icons/light-icon.png",
+      "size": 32
+    }, {
+      "light": "icons/dark-icon.png",
+      "dark": "icons/light-icon.png",
+      "size": 48
+    }, {
+      "light": "icons/dark-icon.png",
+      "dark": "icons/light-icon.png",
+      "size": 128
+    }]
   },
+  "options_page": "newtab.html?src=options",
   "commands": {
-    "open-window": {
+    "open-newtab": {
       "suggested_key": {
-        "default": "Alt+E"
+        "default": "Alt+Z"
       },
-      "description": "打开独立小窗口"
+      "description": "__MSG_cmdOpenNewtabDesc__"
     }
   }
 }

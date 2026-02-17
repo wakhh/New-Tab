@@ -14,8 +14,7 @@ export default defineConfig({
     minify: true,
     rollupOptions: {
       input: {
-        newtab: resolve(__dirname, 'src/index/newtab.html'),
-        window: resolve(__dirname, 'src/index/window.html')
+        newtab: resolve(__dirname, 'src/index/newtab.html')
       },
       output: {
         entryFileNames: 'assets/[name].js',

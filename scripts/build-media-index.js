@@ -7,24 +7,41 @@
 //   filename 文件名
 //   mtime    修改时间（毫秒时间戳，供时间排序）
 //   type     媒体类型（image | music | video）
-// 只收录图片/音乐/视频扩展名的文件；空文件夹不参与。
+// 规则：Music 文件夹只收录音乐扩展名；Pictures/Videos 文件夹收录全部三种。
 import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-// 媒体类型判定（按扩展名）
 const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico', 'avif']
 const MUSIC_EXTS = ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'opus']
 const VIDEO_EXTS = ['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv']
+const ALL_EXTS = [...IMAGE_EXTS, ...MUSIC_EXTS, ...VIDEO_EXTS]
 
-function detectType(filename) {
+function detectType(filename, allowedExts) {
   const ext = String(filename).split('.').pop().toLowerCase()
+  if (!allowedExts.includes(ext)) return null
   if (IMAGE_EXTS.includes(ext)) return 'image'
   if (MUSIC_EXTS.includes(ext)) return 'music'
   if (VIDEO_EXTS.includes(ext)) return 'video'
   return null
+}
+
+function _collectFrom(dir, path1, path2, allowedExts) {
+  if (!existsSync(dir)) return []
+  const out = []
+  let entries
+  try { entries = readdirSync(dir) } catch { return out }
+  for (const name of entries) {
+    let st
+    try { st = statSync(join(dir, name)) } catch { continue }
+    if (st.isFile()) {
+      const type = detectType(name, allowedExts)
+      if (type) out.push({ path1, path2, filename: name, mtime: st.mtimeMs, type })
+    }
+  }
+  return out
 }
 
 const items = []
@@ -32,49 +49,22 @@ const items = []
 for (const path1 of ['Pictures', 'Music', 'Videos']) {
   const dir = join(ROOT, path1)
   if (!existsSync(dir)) continue
-  const entries = readdirSync(dir)
-  const files = []
-  const subdirs = []
+  const allowedExts = path1 === 'Music' ? MUSIC_EXTS : ALL_EXTS
+
+  items.push(..._collectFrom(dir, path1, '', allowedExts))
+
+  let entries
+  try { entries = readdirSync(dir) } catch { continue }
   for (const name of entries) {
     let st
-    try {
-      st = statSync(join(dir, name))
-    } catch {
-      continue
-    }
-    if (st.isFile()) files.push([name, st])
-    else if (st.isDirectory()) subdirs.push(name)
-  }
-
-  // 根目录下的直接文件
-  for (const [name, st] of files) {
-    const type = detectType(name)
-    if (type) items.push({ path1, path2: '', filename: name, mtime: st.mtimeMs, type })
-  }
-
-  // 一级子文件夹下的文件
-  for (const sub of subdirs) {
-    const subDir = join(dir, sub)
-    let subEntries
-    try {
-      subEntries = readdirSync(subDir)
-    } catch {
-      continue
-    }
-    for (const name of subEntries) {
-      let st
-      try {
-        st = statSync(join(subDir, name))
-      } catch {
-        continue
-      }
-      if (!st.isFile()) continue
-      const type = detectType(name)
-      if (type) items.push({ path1, path2: sub, filename: name, mtime: st.mtimeMs, type })
+    try { st = statSync(join(dir, name)) } catch { continue }
+    if (st.isDirectory()) {
+      items.push(..._collectFrom(join(dir, name), path1, name, allowedExts))
     }
   }
 }
 
-// 紧凑输出（文件数可能上千，缩进会显著增大体积影响 fetch 效率）
+items.sort((a, b) => b.mtime - a.mtime)
+
 writeFileSync(join(ROOT, 'media-index.json'), JSON.stringify(items) + '\n')
 console.log(`media-index: ${items.length} files -> media-index.json`)

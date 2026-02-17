@@ -15,6 +15,5 @@
 .ui-text::before {
   content: 'ⓘ';
   margin-right: 2px;
-  opacity: 0.75;
 }
 </style>

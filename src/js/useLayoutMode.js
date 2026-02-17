@@ -1,10 +1,10 @@
 import { computed, ref, watch } from 'vue'
-import { viewportW, viewportH } from './useViewport'
-import { containerW, containerH } from './useVisualContainer'
-import { currentWallpaper, wpMediaInfo } from './useWallpaper'
-import { mediaItemW, mediaItemH } from './useVideoElement'
+import { viewportW, viewportH, containerW, containerH } from './useVisualState'
+import { currentWallpaper, wpMediaInfo } from './useThemeWallpaper'
+import { visualItemW, visualItemH } from './useVideoElement'
+import { displayMode } from './useVisualState'
 import { tileVideoCount } from './useTileLayout'
-import { videoOn, mediaActive, visualItem, displayMode } from './useVisualOwner'
+import { videoOn, mediaVisualOn, mediaVisualItem } from './useSourceState'
 
 const tileDirUp = ref(true)
 
@@ -26,13 +26,11 @@ export const viewportRatio = computed(() => ratioType(viewportW.value, viewportH
 
 export const areaRatio = computed(() => ratioType(containerW.value, containerH.value))
 
-export const curW = computed(() => mediaActive.value ? mediaItemW.value : wpMediaInfo.value.w)
-export const curH = computed(() => mediaActive.value ? mediaItemH.value : wpMediaInfo.value.h)
+export const curW = computed(() => mediaVisualOn.value ? visualItemW.value : wpMediaInfo.value.w)
+export const curH = computed(() => mediaVisualOn.value ? visualItemH.value : wpMediaInfo.value.h)
 export const curRatio = computed(() => curW.value && curH.value ? ratioType(curW.value, curH.value) : null)
 
-export const isVideoSource = computed(() =>
-  (mediaActive.value && videoOn.value) || !!currentWallpaper.value?.isVideo
-)
+export const isvideoType = computed(() => videoOn.value)
 
 export const curExcess = computed(() => {
   const w = curW.value
@@ -78,7 +76,7 @@ export function setDisplayMode(v, repeat) {
     displayMode.value = v
     return
   }
-  if (!isVideoSource.value) { displayMode.value = v; return }
+  if (!isvideoType.value) { displayMode.value = v; return }
 
   const max = maxTileCount.value
   if (max <= 1) { tileVideoCount.value = 1; displayMode.value = 'tile'; return }
@@ -99,7 +97,7 @@ export function setDisplayMode(v, repeat) {
   }
 }
 
-watch([() => visualItem.value?.key, () => currentWallpaper.value?.url, () => curW.value, () => curH.value], () => {
+watch([() => mediaVisualItem.value?.key, () => currentWallpaper.value?.url, () => curW.value, () => curH.value], () => {
   const m = maxTileCount.value
   tileVideoCount.value = defaultTileCount(m)
   tileDirUp.value = true

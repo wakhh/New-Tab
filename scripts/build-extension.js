@@ -2,7 +2,7 @@
 // 安全约束：绝不触碰根目录中的硬链接文件夹 Pictures/Videos/Music，只更新明确的白名单产物
 // 注意：删除操作用系统命令（rm/rd）绕过 CodeBuddy 注入的 fs 安全删除 shim（与 Vite emptyDir 冲突）
 import { build } from 'vite'
-import { cpSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { cpSync, existsSync, readdirSync, readFileSync, writeFileSync, watch as fsWatch } from 'fs'
 import { execSync } from 'child_process'
 import { resolve, dirname, join } from 'path'
 import { fileURLToPath } from 'url'
@@ -12,7 +12,7 @@ const root = resolve(__dirname, '..')
 const tmp = resolve(root, '.build-tmp')
 
 // 根目录中由构建生成/管理的文件与目录（白名单，除此之外一律不动）
-const PRODUCTS = ['newtab.html', 'window.html', 'assets', 'manifest.json', 'background.js', 'theme-init.js']
+const PRODUCTS = ['newtab.html', 'theme-init.js', 'assets', 'manifest.json', 'background.js', '_locales', 'icons']
 
 const watch = process.argv.includes('--watch')
 
@@ -48,16 +48,36 @@ async function copyOutput() {
     }
   }
 
-  // 2. assets 目录：整体替换
+  // 2. theme-init.js：从 src/index/ 直接复制（IIFE 无需 Vite 打包，需在 DOM 渲染前同步执行）
+  const themeInitSrc = resolve(root, 'src/index/theme-init.js')
+  if (existsSync(themeInitSrc)) cpSync(themeInitSrc, resolve(root, 'theme-init.js'), { force: true })
+
+  // 3. assets 目录：整体替换
   const assetsSrc = resolve(tmp, 'assets')
   const assetsDest = resolve(root, 'assets')
   sysRm(assetsDest)
   if (existsSync(assetsSrc)) cpSync(assetsSrc, assetsDest, { recursive: true })
 
-  // 3. public 复制来的 manifest.json / background.js / theme-init.js
-  for (const f of ['manifest.json', 'background.js', 'theme-init.js']) {
-    const src = resolve(tmp, f)
+  // 3. 直接从 public/ 复制（Vite watch 不监听 public 目录，所以跳过 .build-tmp）
+  for (const f of ['manifest.json', 'background.js']) {
+    const src = resolve(root, 'public', f)
     if (existsSync(src)) cpSync(src, resolve(root, f), { force: true })
+  }
+
+  // 4. _locales 目录：直接从 public/ 复制
+  const localesSrc = resolve(root, 'public', '_locales')
+  const localesDest = resolve(root, '_locales')
+  if (existsSync(localesSrc)) {
+    sysRm(localesDest)
+    cpSync(localesSrc, localesDest, { recursive: true })
+  }
+
+  // 5. icons 目录：直接从 public/ 复制
+  const iconsSrc = resolve(root, 'public', 'icons')
+  const iconsDest = resolve(root, 'icons')
+  if (existsSync(iconsSrc)) {
+    sysRm(iconsDest)
+    cpSync(iconsSrc, iconsDest, { recursive: true })
   }
 }
 
@@ -81,6 +101,13 @@ async function main() {
           copyOutput().then(() => console.log('✅ watch 构建完成，产物已更新'))
         }
       })
+      // 额外监听 public/ 目录（Vite 不自动监听它）
+      const publicDir = resolve(root, 'public')
+      if (existsSync(publicDir)) {
+        fsWatch(publicDir, { recursive: true }, () => {
+          copyOutput().then(() => console.log('✅ public 变更，产物已同步'))
+        })
+      }
     }
   } catch (e) {
     console.error('构建失败:', e)

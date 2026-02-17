@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { isPortrait } from '../js/useViewport'
+import { isPortrait } from '../js/useVisualState'
 
 const props = defineProps({
   id: { type: String, required: true },

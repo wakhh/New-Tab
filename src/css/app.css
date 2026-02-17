@@ -7,6 +7,11 @@
 
   --bg: #f5f5f5;
   --accent: #0a6cff;
+  --danger: #e0533d;
+  --overlay: rgba(0, 0, 0, 0.3);
+  --shadow: rgba(0, 0, 0, 0.2);
+  --border-subtle: rgba(0, 0, 0, 0.2);
+  --text-shadow-blur: rgba(255, 255, 255, 0.7);
   --ctrl-h: 40px;
 }
 
@@ -18,6 +23,11 @@
   --active-bg: rgba(0, 0, 0, 1);
   --bg: #111;
   --accent: #4cc2ff;
+  --danger: #ff6b55;
+  --overlay: rgba(0, 0, 0, 0.5);
+  --shadow: rgba(0, 0, 0, 0.5);
+  --border-subtle: rgba(255, 255, 255, 0.25);
+  --text-shadow-blur: rgba(0, 0, 0, 0.7);
 }
 
 * {
@@ -44,4 +54,20 @@ body {
   height: 100%;
   position: relative;
   color: var(--panel-text);
+}
+
+html.mode-popup,
+html.mode-popup body {
+  width: 800px;
+  height: 600px;
+  overflow: hidden;
+}
+
+html.mode-popup.ctrl-rows-1 .ui-panel-bl,
+html.mode-popup.ctrl-rows-1 .ui-panel-br {
+  bottom: calc(12px + var(--ctrl-h) + 4px);
+}
+html.mode-popup.ctrl-rows-2 .ui-panel-bl,
+html.mode-popup.ctrl-rows-2 .ui-panel-br {
+  bottom: calc(12px + var(--ctrl-h) * 2 + 8px);
 }

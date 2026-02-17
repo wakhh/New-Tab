@@ -1,6 +1,8 @@
 <script setup>
-import { usePanelVisibility } from '../js/useViewport'
+import { usePanelVisibility } from '../js/useVisualState'
 import PlayerContainer from '../panels/PlayerContainer.vue'
+import IconsContainer from '../panels/IconsContainer.vue'
+import FloatIcon from '../panels/FloatIcon.vue'
 import PanelControl from '../panels/PanelControl.vue'
 import PanelSettings from '../panels/PanelSettings.vue'
 import PanelWallpaper from '../panels/PanelWallpaper.vue'
@@ -16,7 +18,9 @@ const showControlBar = usePanelVisibility('ctrl', { edge: 'bottom' })
 <template>
   <div class="newtab-root">
     <PlayerContainer />
+    <IconsContainer />
     <PanelSettings />
+    <FloatIcon />
     <PanelControl v-show="showControlBar" />
     <PanelWallpaper v-show="showWallpaperPanel" />
     <PanelDisplay v-show="showDisplayPanel" />

@@ -1,5 +1,5 @@
 <script setup>
-import { hoveredPanel } from '../js/useViewport'
+import { hoveredPanel } from '../js/useVisualState'
 const props = defineProps({ panelId: { type: String, default: '' } })
 function onEnter() { if (props.panelId) hoveredPanel.value = props.panelId }
 function onLeave() { if (hoveredPanel.value === props.panelId) hoveredPanel.value = null }

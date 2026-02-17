@@ -6,11 +6,12 @@ import UiButton from '../ui/UiButton.vue'
 import UiCheck from '../ui/UiCheck.vue'
 import { resetAllSettings } from '../js/useStorage'
 import { settingsOpen, autoHide, portraitPanel } from '../js/usePersist'
-import { isPortrait, edgeTR, hoveredPanel, panelActive } from '../js/useViewport'
+import { isPortrait, edgeTR, hoveredPanel, panelActive, mouseInViewport } from '../js/useVisualState'
 import { t } from '../js/useI18n'
 
 const showPanel = computed(() => {
   if (isPortrait.value) return true
+  if (!mouseInViewport.value && autoHide.value) return false
   if (settingsOpen.value) {
     if (!autoHide.value) return true
     if (panelActive.value === 'tr') return true

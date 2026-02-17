@@ -5,11 +5,12 @@ import UiRow from '../ui/UiRow.vue'
 import UiSwitch from '../ui/UiSwitch.vue'
 import UiButton from '../ui/UiButton.vue'
 import { t } from '../js/useI18n'
-import { mediaListWidth, sourceStates, networkFiles, selectedSourceKey, MEDIA_SOURCES, MEDIA_TYPES } from '../js/usePersist'
+import { mediaListWidth, sourceStates, networkFiles, selectedSource, MEDIA_SOURCES, MEDIA_TYPES } from '../js/usePersist'
 import { mediaLocalFiles, displayLists } from '../js/useMediaLists'
-import { playbackSelectItem, playbackCycleFolder } from '../js/usePlaybackActions'
-import { panelActive, edgeBR, hoveredPanel } from '../js/useViewport'
-import { itemKey } from '../utils/media'
+import { playbackSelectItem } from '../js/useItemNav'
+import { playbackCycleFolder } from '../js/useMediaLists'
+import { panelActive, edgeBR, hoveredPanel } from '../js/useVisualState'
+import { itemId } from '../utils/media'
 
 const mediaBatchUrlInput = ref('')
 
@@ -38,8 +39,8 @@ for (const src of MEDIA_SOURCES) {
   }
 }
 
-const currentSource = computed(() => (selectedSourceKey.value || 'local-image').split('-')[0])
-const currentMediaType = computed(() => (selectedSourceKey.value || 'local-image').split('-')[1])
+const currentSource = computed(() => selectedSource.value?.src || 'local')
+const currentMediaType = computed(() => selectedSource.value?.type || 'image')
 const currentFolder = computed(() => sourceStates[currentSource.value]?.[currentMediaType.value]?.folder.value || 'all')
 const currentSortBy = computed(() => sourceStates[currentSource.value]?.[currentMediaType.value]?.sortBy.value || 'name')
 const currentSortDir = computed(() => sourceStates[currentSource.value]?.[currentMediaType.value]?.sortDir.value || 'asc')
@@ -90,12 +91,12 @@ function selectItem(item) {
 
 function removeNetworkFile(item) {
   if (!item || currentSource.value !== 'network') return
-  const key = itemKey(item)
+  const key = itemId(item)
   if (!key) return
-  const next = networkFiles.value.filter((f) => itemKey(f) !== key)
+  const next = networkFiles.value.filter((f) => itemId(f) !== key)
   networkFiles.set(next)
   const sel = sourceStates[currentSource.value][currentMediaType.value].selectedItem.value
-  if (sel && itemKey(sel) === key) sourceStates[currentSource.value][currentMediaType.value].selectedItem.set(null)
+  if (sel && itemId(sel) === key) sourceStates[currentSource.value][currentMediaType.value].selectedItem.set(null)
 }
 
 function cycleFolder() {
@@ -106,10 +107,9 @@ function toggleSort(by) {
   if (st.sortBy.value === by) st.sortDir.set(st.sortDir.value === 'asc' ? 'desc' : 'asc')
   else { st.sortBy.set(by); st.sortDir.set('asc') }
 }
-function selectSourceKey(newKey) {
+function selectSource(newKey) {
   if (!newKey) return
-  const [src, type] = newKey.split('-')
-  if (sourceStates[src]?.[type]) selectedSourceKey.set(newKey)
+  if (sourceStates[newKey.src]?.[newKey.type]) selectedSource.set(newKey)
 }
 
 
@@ -140,10 +140,10 @@ function onSortSelect(v) {
 }
 
 function onMediaSourceSelect(v) {
-  selectSourceKey(`${v}-${currentMediaType.value}`)
+  selectSource({ src: v, type: currentMediaType.value })
 }
 function onMediaTypeSelect(v) {
-  selectSourceKey(`${currentSource.value}-${v}`)
+  selectSource({ src: currentSource.value, type: v })
 }
 
 const folderLabel = computed(() =>
@@ -158,9 +158,13 @@ function itemLabel(item) {
 }
 
 const listEl = ref(null)
+const panelRef = ref(null)
 
-const listWidth = mediaListWidth
-const listWidthStyle = computed(() => ({ width: `${listWidth.value || 260}px`, flex: '0 0 auto' }))
+const listWidth = ref(mediaListWidth.value || 260)
+watch(mediaListWidth, (v) => {
+  if (v != null) listWidth.value = v
+})
+const listWidthStyle = computed(() => ({ width: `${listWidth.value}px`, flex: '0 0 auto' }))
 
 const resizing = ref(false)
 let resizeStartX = 0
@@ -171,7 +175,7 @@ function onListResizeStart(e) {
   resizing.value = true
   panelActive.value = 'br'
   resizeStartX = e.clientX
-  resizeStartW = listEl.value?.offsetWidth || listWidth.value || 0
+  resizeStartW = panelRef.value?.$el?.offsetWidth || listWidth.value
   window.addEventListener('mousemove', onListResizeMove)
   window.addEventListener('mouseup', onListResizeEnd)
   e.preventDefault()
@@ -188,7 +192,12 @@ function onListResizeEnd() {
   if (!resizing.value) return
   resizing.value = false
   panelActive.value = null
-  listWidth.set(listWidth.value)
+  const el = panelRef.value?.$el
+  const actualW = el ? el.offsetWidth : listWidth.value
+  if (actualW !== (mediaListWidth.value || 260)) {
+    mediaListWidth.set(actualW)
+    listWidth.value = actualW
+  }
   window.removeEventListener('mousemove', onListResizeMove)
   window.removeEventListener('mouseup', onListResizeEnd)
 }
@@ -204,8 +213,8 @@ function scrollToSelected() {
   const list = currentDisplayList.value
   const sel = currentSelectedItem.value
   if (sel) {
-    const selKey = itemKey(sel)
-    const idx = list.findIndex((it) => itemKey(it) === selKey)
+    const selKey = itemId(sel)
+    const idx = list.findIndex((it) => itemId(it) === selKey)
     if (idx >= 0) {
       const itemEl = el.children[idx]
       if (itemEl) {
@@ -244,7 +253,7 @@ watch(
 </script>
 
 <template>
-  <UiPanel panel-id="br" class="ui-panel-br" :style="listWidthStyle">
+  <UiPanel ref="panelRef" panel-id="br" class="ui-panel-br" :style="listWidthStyle">
     <div v-if="currentSource === 'network'" class="media-batch-wrap">
       <div class="media-resize" :class="{ active: resizing }" @mousedown="onListResizeStart">
         <svg viewBox="0 0 8 14" width="5" height="10" aria-hidden="true">
@@ -278,7 +287,7 @@ watch(
       </div>
       <div ref="listEl" class="ui-column media-list">
         <div v-for="(item, idx) in currentDisplayList" :key="rowKey(item)" class="media-item"
-          :class="{ selected: currentSelectedItem && itemKey(currentSelectedItem) === itemKey(item) }" @click="selectItem(item)">
+          :class="{ selected: currentSelectedItem && itemId(currentSelectedItem) === itemId(item) }" @click="selectItem(item)">
           <span class="media-item-main">{{ itemLabel(item) }}</span>
           <span class="media-item-idx">{{ idx + 1 }}</span>
           <button v-if="currentSource === 'network'" class="media-delete" type="button"
@@ -332,7 +341,7 @@ watch(
 .media-list {
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.2));
+  border: 1px solid var(--panel-border);
   border-radius: 6px;
   background: var(--panel-bg);
   color: var(--panel-text);
@@ -464,6 +473,6 @@ watch(
 
 .media-delete:hover {
   opacity: 1;
-  color: #e0533d;
+  color: var(--danger);
 }
 </style>

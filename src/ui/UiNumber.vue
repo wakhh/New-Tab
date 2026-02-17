@@ -52,10 +52,10 @@ function onBlur(e) {
   height: 26px;
 }
 .ui-number input {
-  width: 42px;
+  width: 32px;
   height: 20px;
   border: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+  border-bottom: 1px solid var(--border-subtle);
   background: transparent;
   color: inherit;
   font: inherit;

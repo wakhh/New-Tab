@@ -1,25 +1,31 @@
 import {
   settingsOpen,
-  selectedSourceKey,
-  visualSourceKey,
-  audioSourceKey,
-  wpVideoPlaying, wpVideoProgress,
-  visualPaused, audioPaused,
-  wpVideoMuted, mediaVideoMuted, mediaAudioMuted,
+  selectedSource,
+  visualSource,
+  musicSource,
+  videoPaused,
   autoHide,
   sourceStates
 } from './usePersist'
-import { mediaVideoEl, mediaAudioEl } from './usePlaybackState'
-import { currentWallpaper, wpVideoKey } from './useWallpaper'
-import { cycleTheme } from './useTheme'
-import { centerIcon, seekIcon } from './useFloatIcon'
-import { displayMode } from './useVisualOwner'
+import { videoEl } from './useVideoElement'
+import { musicEl } from './useAudioElement'
+import { currentWallpaper } from './useThemeWallpaper'
+import { cycleTheme } from './useThemeWallpaper'
+import { showSeekIcon } from './useFloatIcon'
+import { displayMode } from './useVisualState'
+import { mediaImgOn, mediaVisualOn } from './useSourceState'
 import {
-  playbackToggle, playbackStop, playbackNav, playbackCycleMode, playbackCycleDirection,
-  playbackMuteAll, playbackAdjustVolume, playbackSeek,
-  playbackCycleMediaType, playbackCycleMediaSource, playbackCycleFolder, playbackSelectItem
-} from './usePlaybackActions'
+  playbackToggle, playbackStop
+} from './usePlayToggle'
+import {
+  playbackNav, playbackSelectItem
+} from './useItemNav'
+import { playbackCycleMode, playbackCycleDirection } from './usePlayMode'
+import { playbackSeek } from './useProgressStore'
+import { playbackMuteAll, playbackAdjustVolume } from './useVolumeCtrl'
+import { playbackCycleMediaType, playbackCycleMediaSource, playbackCycleFolder, displayLists } from './useMediaLists'
 import { setDisplayMode } from './useLayoutMode'
+import { itemId } from '../utils/media'
 
 function isSeekableEl(el) {
   if (!el) return false
@@ -29,36 +35,31 @@ function isSeekableEl(el) {
 }
 
 function getSeekTarget() {
-  const sel = selectedSourceKey.value
+  const sel = selectedSource.value
   if (sel) {
-    const [src, type] = sel.split('-')
+    const type = sel.type
     if (type === 'video' || type === 'music') {
-      const el = type === 'video' ? mediaVideoEl.value : mediaAudioEl.value
-      if (isSeekableEl(el)) return { which: type === 'video' ? 'media-visual' : 'media-audio', el }
+      const el = type === 'video' ? videoEl.value : musicEl.value
+      if (isSeekableEl(el)) return { which: type === 'video' ? 'media-visual' : 'media-music', el }
     }
   }
-  const vsk = visualSourceKey.value
+  const vsk = visualSource.value
   if (vsk) {
-    const [, vtype] = vsk.split('-')
-    if (vtype === 'video') {
-      const el = mediaVideoEl.value
+    if (vsk.type === 'video') {
+      const el = videoEl.value
       if (isSeekableEl(el)) return { which: 'media-visual', el }
     }
   }
-  const ask = audioSourceKey.value
+  const ask = musicSource.value
   if (ask) {
-    const el = mediaAudioEl.value
-    if (isSeekableEl(el)) return { which: 'media-audio', el }
+    const el = musicEl.value
+    if (isSeekableEl(el)) return { which: 'media-music', el }
   }
   if (currentWallpaper.value?.isVideo) {
-    const el = mediaVideoEl.value
+    const el = videoEl.value
     if (el && !el.error && Number.isFinite(el.duration)) return { which: 'wp-video', el }
   }
   return null
-}
-
-function showSeekIcon(dir) {
-  seekIcon.value = { dir, key: Date.now() }
 }
 
 function doSeek(target, delta) {
@@ -75,7 +76,6 @@ function doSeek(target, delta) {
 
   if (target.which === 'wp-video') {
     el.currentTime = next
-    wpVideoProgress.set({ key: wpVideoKey(), time: next })
   } else {
     playbackSeek(next, target.which)
   }
@@ -134,6 +134,7 @@ function onKeyDown(e) {
 
   if (e.key === 'ArrowLeft') {
     e.preventDefault()
+    if (mediaImgOn.value) { playbackNav('prev'); return }
     const tgt = getSeekTarget()
     if (!tgt) return
     const now = performance.now()
@@ -145,6 +146,7 @@ function onKeyDown(e) {
     }
   } else if (e.key === 'ArrowRight') {
     e.preventDefault()
+    if (mediaImgOn.value) { playbackNav('next'); return }
     const tgt = getSeekTarget()
     if (!tgt) return
     const now = performance.now()
@@ -161,18 +163,17 @@ function onKeyDown(e) {
     e.preventDefault()
     playbackNav('next')
   } else if (e.key === ' ') {
-    e.preventDefault(); playbackToggle(null, { audioFirst: false })
+    e.preventDefault(); playbackToggle(null, { musicFirst: false })
   } else if (e.key === 'Enter') {
     e.preventDefault()
-    if (!visualSourceKey.value && !audioSourceKey.value) {
-      const key = selectedSourceKey.value
+    if (!visualSource.value && !musicSource.value) {
+      const key = selectedSource.value
       if (key) {
-        const [src, type] = key.split('-')
-        const item = sourceStates[src]?.[type]?.selectedItem.value
+        const item = sourceStates[key.src]?.[key.type]?.selectedItem.value
         if (item) playbackSelectItem(item)
       }
     } else {
-      playbackToggle(null, { audioFirst: true })
+      playbackToggle(null, { musicFirst: true })
     }
   } else if (e.key === 's' || e.key === 'S') {
     e.preventDefault(); settingsOpen.value = !settingsOpen.value
@@ -184,8 +185,7 @@ function onKeyDown(e) {
     if (settingsOpen.value) { e.preventDefault(); playbackCycleDirection() }
   } else if (e.key === 'm' || e.key === 'M') {
     e.preventDefault()
-    const anyUnmuted = !wpVideoMuted.value || !mediaVideoMuted.value || !mediaAudioMuted.value
-    playbackMuteAll(anyUnmuted)
+    playbackMuteAll()
   } else if (e.key === '-' || e.key === '_') {
     e.preventDefault()
     playbackAdjustVolume(-5)
@@ -205,9 +205,9 @@ function onKeyDown(e) {
     e.preventDefault(); document.getElementById('wallpaper-file-input')?.click()
   } else if (e.key === 'Escape') {
     e.preventDefault()
-    if (audioSourceKey.value) playbackStop('media-audio')
-    else if (visualSourceKey.value) playbackStop('media-visual')
-    else if (currentWallpaper.value?.isVideo && wpVideoPlaying.value) playbackStop('wp-video')
+    if (musicSource.value) playbackStop('media-music')
+    else if (mediaVisualOn.value) playbackStop('media-visual')
+    else if (currentWallpaper.value?.isVideo) playbackStop('wp-video')
     else if (settingsOpen.value) settingsOpen.value = false
   } else if (e.key === 'l' || e.key === 'L') {
     if (settingsOpen.value) { e.preventDefault(); playbackCycleMediaType() }
@@ -215,7 +215,36 @@ function onKeyDown(e) {
     if (settingsOpen.value) { e.preventDefault(); playbackCycleFolder() }
   } else if (e.key === 'n' || e.key === 'N') {
     if (settingsOpen.value) { e.preventDefault(); playbackCycleMediaSource() }
+  } else if (e.key === 'p' || e.key === 'P') {
+    e.preventDefault()
+    switchVisualMediaType('image')
+  } else if (e.key === 'v' || e.key === 'V') {
+    e.preventDefault()
+    switchVisualMediaType('video')
   }
+}
+
+function switchVisualMediaType(type) {
+  const cur = selectedSource.value
+  if (!cur) return
+  const target = { src: cur.src, type }
+  const st = sourceStates[target.src]?.[target.type]
+  if (!st) return
+  if (cur.type !== type) selectedSource.set(target)
+
+  let item = st.selectedItem.value
+  if (!item) {
+    const list = displayLists[target.src]?.[target.type]?.value
+    item = list && list.length ? list[0] : null
+  }
+  if (!item) return
+
+  const curVS = visualSource.value
+  if (curVS && curVS.src === target.src && curVS.type === target.type) {
+    const curItem = sourceStates[curVS.src]?.[curVS.type]?.selectedItem.value
+    if (curItem && itemId(curItem) === itemId(item)) return
+  }
+  playbackSelectItem(item)
 }
 
 window.addEventListener('keydown', onKeyDown)

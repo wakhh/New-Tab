@@ -7,9 +7,9 @@ export function shuffleArray(arr) {
   return a
 }
 
-export function itemKey(item) {
+export function itemId(item) {
   if (!item) return null
-  return item.url || `${item.path1}/${item.path2 ? item.path2 + '/' : ''}${item.filename}`
+  return item.url || localUrl(item)
 }
 
 export function localUrl(item) {
@@ -20,14 +20,18 @@ export function mediaUrl(item) {
   return item.url || localUrl(item)
 }
 
-export function itemSourceKeyOf(it) {
+export function sourceOf(it) {
   if (!it) return null
-  return (it.url ? 'network' : 'local') + '-' + it.type
+  return { src: it.url ? 'network' : 'local', type: it.type }
 }
 
-export function findItemByKey(k, sourceFiles, src, type) {
+export function sourceEquals(a, b) {
+  return !!a && !!b && a.src === b.src && a.type === b.type
+}
+
+export function findItemById(k, sourceFiles, src, type) {
   if (!k || !src || !type) return null
-  return sourceFiles[src]?.[type]?.value.find((f) => itemKey(f) === k) || null
+  return sourceFiles[src]?.[type]?.value.find((f) => itemId(f) === k) || null
 }
 
 export function buildList(sourceFiles, src, type, folderVal, sortByVal, sortDirVal) {
