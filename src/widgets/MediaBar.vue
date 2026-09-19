@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount, onMounted } from 'vue'
-import UiPanel from '../ui/UiPanel.vue'
+import UiWidget from '../ui/UiWidget.vue'
 import UiRow from '../ui/UiRow.vue'
 import UiSwitch from '../ui/UiSwitch.vue'
 import UiButton from '../ui/UiButton.vue'
@@ -9,7 +9,7 @@ import { mediaListWidth, sourceStates, networkFiles, selectedSource, MEDIA_SOURC
 import { mediaLocalFiles, displayLists } from '../js/useMediaLists'
 import { playbackSelectItem } from '../js/useItemNav'
 import { playbackCycleFolder } from '../js/useMediaLists'
-import { panelActive, edgeBR, hoveredPanel } from '../js/useVisualState'
+import { widgetActive, edgeBR, hoveredWidget } from '../js/useVisualState'
 import { itemId } from '../utils/media'
 
 const mediaBatchUrlInput = ref('')
@@ -158,7 +158,7 @@ function itemLabel(item) {
 }
 
 const listEl = ref(null)
-const panelRef = ref(null)
+const widgetRef = ref(null)
 
 const listWidth = ref(mediaListWidth.value || 260)
 watch(mediaListWidth, (v) => {
@@ -173,9 +173,9 @@ const MIN_LIST_W = 180
 
 function onListResizeStart(e) {
   resizing.value = true
-  panelActive.value = 'br'
+  widgetActive.value = 'br'
   resizeStartX = e.clientX
-  resizeStartW = panelRef.value?.$el?.offsetWidth || listWidth.value
+  resizeStartW = widgetRef.value?.$el?.offsetWidth || listWidth.value
   window.addEventListener('mousemove', onListResizeMove)
   window.addEventListener('mouseup', onListResizeEnd)
   e.preventDefault()
@@ -191,8 +191,8 @@ function onListResizeMove(e) {
 function onListResizeEnd() {
   if (!resizing.value) return
   resizing.value = false
-  panelActive.value = null
-  const el = panelRef.value?.$el
+  widgetActive.value = null
+  const el = widgetRef.value?.$el
   const actualW = el ? el.offsetWidth : listWidth.value
   if (actualW !== (mediaListWidth.value || 260)) {
     mediaListWidth.set(actualW)
@@ -242,9 +242,9 @@ watch(
 )
 
 watch(
-  [edgeBR, hoveredPanel],
+  [edgeBR, hoveredWidget],
   async () => {
-    if (edgeBR.value || hoveredPanel.value === 'br') {
+    if (edgeBR.value || hoveredWidget.value === 'br') {
       await nextTick()
       scrollToSelected()
     }
@@ -253,7 +253,7 @@ watch(
 </script>
 
 <template>
-  <UiPanel ref="panelRef" panel-id="br" class="ui-panel-br" :style="listWidthStyle">
+  <UiWidget ref="widgetRef" widget-id="br" class="ui-widget-br" :style="listWidthStyle">
     <div v-if="currentSource === 'network'" class="media-batch-wrap">
       <div class="media-resize" :class="{ active: resizing }" @mousedown="onListResizeStart">
         <svg viewBox="0 0 8 14" width="5" height="10" aria-hidden="true">
@@ -314,14 +314,14 @@ watch(
       <UiSwitch :options="typeOptions" :model-value="currentMediaType" show-shortcut="L" @select="onMediaTypeSelect" />
       <UiSwitch :options="sortOptions" :model-value="currentSortBy" @select="onSortSelect" />
     </UiRow>
-  </UiPanel>
+  </UiWidget>
 </template>
 
 <style scoped>
-.ui-panel-br { bottom: 12px; right: 12px; max-width: calc(100vw - 24px); box-sizing: border-box; }
-.ui-panel-br > :deep(.ui-row) { justify-content: flex-end !important; flex-wrap: nowrap !important; }
+.ui-widget-br { bottom: 12px; right: 12px; max-width: calc(100vw - 24px); box-sizing: border-box; }
+.ui-widget-br > :deep(.ui-row) { justify-content: flex-end !important; flex-wrap: nowrap !important; }
 @media (orientation: landscape) {
-  .ui-panel-br { max-width: calc(100vw / 3); }
+  .ui-widget-br { max-width: calc(100vw / 3); }
 }
 
 .media-batch-wrap,
@@ -341,10 +341,10 @@ watch(
 .media-list {
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--panel-border);
+  border: 1px solid var(--widget-border);
   border-radius: 6px;
-  background: var(--panel-bg);
-  color: var(--panel-text);
+  background: var(--widget-bg);
+  color: var(--widget-text);
   font: inherit;
   outline: none;
 }
@@ -371,7 +371,7 @@ watch(
   overflow-x: hidden;
   color-scheme: light dark;
   scrollbar-width: thin;
-  scrollbar-color: var(--panel-text) transparent;
+  scrollbar-color: var(--widget-text) transparent;
 }
 
 .media-list::-webkit-scrollbar {
@@ -379,7 +379,7 @@ watch(
 }
 
 .media-list::-webkit-scrollbar-thumb {
-  background: var(--panel-text);
+  background: var(--widget-text);
   opacity: 0.4;
   border-radius: 3px;
 }
@@ -402,7 +402,7 @@ watch(
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--panel-text);
+  color: var(--widget-text);
   opacity: 0.45;
   cursor: col-resize;
   user-select: none;
@@ -431,7 +431,7 @@ watch(
 }
 
 .media-item.selected {
-  background: var(--active-bg);
+  background: var(--hover-bg);
   color: var(--accent);
   font-weight: 600;
 }
@@ -461,7 +461,7 @@ watch(
   flex: none;
   border: none;
   background: transparent;
-  color: var(--panel-text);
+  color: var(--widget-text);
   opacity: 0.45;
   cursor: pointer;
   padding: 0 4px;

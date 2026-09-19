@@ -1,4 +1,4 @@
-import { sourceStates, musicPaused, videoPaused, visualSource, musicSource } from './usePersist'
+import { sourceStates, musicPaused, videoPaused, mediaVisualSource, musicSource } from './usePersist'
 import { videoEl } from './useVideoElement'
 import { musicEl } from './useAudioElement'
 import { itemId, sourceOf } from '../utils/media'
@@ -125,7 +125,7 @@ export function playbackSelectItem(item) {
     navigate(source, item)
   }
 
-  if (type === 'image' || type === 'video') visualSource.set(source)
+  if (type === 'image' || type === 'video') mediaVisualSource.set(source)
   else musicSource.set(source)
 }
 

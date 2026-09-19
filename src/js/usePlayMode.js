@@ -1,4 +1,4 @@
-import { sourceStates, videoLoop, visualSource, musicSource } from './usePersist'
+import { sourceStates, videoLoop, mediaVisualSource, musicSource } from './usePersist'
 import { _stateOfSource } from './useSourceHelpers'
 import { showCenterIcon } from './useFloatIcon'
 import { currentWallpaper } from './useThemeWallpaper'
@@ -57,10 +57,10 @@ export function playbackCycleMode(which) {
     if (currentWallpaper.value?.isVideo) { videoLoop.set(!videoLoop.value); return true }
     return false
   }
-  if (which === 'media-visual' || which === 'visual') return cycleKey(visualSource.value)
+  if (which === 'media-visual' || which === 'visual') return cycleKey(mediaVisualSource.value)
   if (which === 'media-music' || which === 'music') return cycleKey(musicSource.value)
 
-  if (cycleKey(visualSource.value)) return true
+  if (cycleKey(mediaVisualSource.value)) return true
   if (cycleKey(musicSource.value)) return true
   if (currentWallpaper.value?.isVideo) { videoLoop.set(!videoLoop.value); return true }
   return false
@@ -74,10 +74,10 @@ export function playbackCycleDirection(which) {
     return true
   }
 
-  if (which === 'media-visual' || which === 'visual') return flip(visualSource.value)
+  if (which === 'media-visual' || which === 'visual') return flip(mediaVisualSource.value)
   if (which === 'media-music' || which === 'music') return flip(musicSource.value)
 
-  if (flip(visualSource.value)) return true
+  if (flip(mediaVisualSource.value)) return true
   if (flip(musicSource.value)) return true
   return false
 }

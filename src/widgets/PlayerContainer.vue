@@ -3,8 +3,8 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import {
   mediaMusicMuted,
   mediaVideoMuted, wpVideoMuted,
-  videoLoop, videoPaused, musicPaused, visualSource,
-  _desktopAlignImage, _desktopAlignVideo, optimize
+  videoLoop, videoPaused, musicPaused, mediaVisualSource,
+  _desktopAlignImage, _desktopAlignVideo, displayOptimize
 } from '../js/usePersist'
 import { containerW, containerH, isPortrait, displayMode,
   desktopAlign, desktopAnchor } from '../js/useVisualState'
@@ -150,7 +150,7 @@ function _windowWheelCapture(e) {
       if (t.closest('.icon-cell')) return
       if (t.closest('.ctx-menu')) return
       if (t.closest('.dialog-overlay')) return
-      if (t.closest('.ui-panel')) return
+      if (t.closest('.ui-widget')) return
       if (t.closest('.float-icon')) return
     }
     if (interactHandleLayerWheel(e, layer) === true) tileOnLayerWheel(e)
@@ -161,7 +161,7 @@ function _windowWheelCapture(e) {
     if (t.closest('.icon-cell')) return
     if (t.closest('.ctx-menu')) return
     if (t.closest('.dialog-overlay')) return
-    if (t.closest('.ui-panel')) return
+    if (t.closest('.ui-widget')) return
     if (t.closest('.float-icon')) return
   }
   const layer = layerEl.value
@@ -176,7 +176,7 @@ function _windowMouseDownCapture(e) {
     if (t.closest('.icon-cell')) return
     if (t.closest('.ctx-menu')) return
     if (t.closest('.dialog-overlay')) return
-    if (t.closest('.ui-panel')) return
+    if (t.closest('.ui-widget')) return
     if (t.closest('.float-icon')) return
   }
   const layer = layerEl.value
@@ -229,7 +229,7 @@ const tileSrc = ref('')
 const tileLayerStyle = computed(() => {
   const src = tileSrc.value
   if (!src) return {}
-  const useContain = optimize.value
+  const useContain = displayOptimize.value
   let bgSize = 'auto'
   if (useContain) {
     const iw = imgNatural.value.w
@@ -266,16 +266,21 @@ watch(desktopAlign, () => {
   tileSrc.value = tileSrc.value.trim()
 })
 
+const LAYER_OFF_X = 3.5
+const LAYER_OFF_Y = 5.5
+
 const layerStyle = computed(() => {
   if (!desktopAlign.value) return {}
   const w = containerW.value
   const h = containerH.value
+  const ox = -LAYER_OFF_X + 'px'
+  const oy = -LAYER_OFF_Y + 'px'
   const area = { inset: 'auto', width: `${w}px`, height: `${h}px` }
   switch (desktopAnchor.value) {
-    case 'lb': return { ...area, left: 0, bottom: 0 }
-    case 'lt': return { ...area, left: 0, top: 0 }
-    case 'rt': return { ...area, right: 0, top: 0 }
-    default: return { ...area, right: 0, bottom: 0 }
+    case 'lb': return { ...area, left: ox, bottom: oy }
+    case 'lt': return { ...area, left: ox, top: oy }
+    case 'rt': return { ...area, right: ox, top: oy }
+    default: return { ...area, right: ox, bottom: oy }
   }
 })
 

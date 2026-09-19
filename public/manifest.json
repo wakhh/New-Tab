@@ -52,6 +52,18 @@
         "default": "Alt+Z"
       },
       "description": "__MSG_cmdOpenNewtabDesc__"
+    },
+    "close-tabs-after": {
+      "suggested_key": {
+        "default": "Alt+W"
+      },
+      "description": "__MSG_cmdCloseTabsAfterDesc__"
+    },
+    "close-tabs-before": {
+      "description": "__MSG_cmdCloseTabsBeforeDesc__"
+    },
+    "close-other-tabs": {
+      "description": "__MSG_cmdCloseOtherTabsDesc__"
     }
   }
 }

@@ -1,33 +1,97 @@
-:root {
-  --panel-bg: rgba(255, 255, 255, 0.72);
-  --panel-text: #111;
-  --panel-border: rgba(0, 0, 0, 0.08);
-  --hover-bg: rgba(255, 255, 255, 1);
-  --active-bg: rgba(255, 255, 255, 1);
+/*
+ * === 颜色 & 透明度变量 — 复用原则 ===
+ *
+ * 颜色和透明度是两个独立维度。新增变量前，先问自己：
+ *
+ *   ① 颜色基底能不能复用？
+ *      — 白色基底（rgba 255,255,255）→ 所有浅色半透明层
+ *      — 黑色基底（rgba 0,0,0）     → 所有深色半透明层
+ *      — 纯色（accent / danger / bg）→ 真正有语义的色彩
+ *
+ *   ② 透明度能不能复用？
+ *      — 现有变量已经覆盖了 0.08 / 0.2 / 0.35 / 0.5 / 0.72 / 0.75 / 1 等梯度
+ *      — 为 ±0.02 的透明度差异新开变量 = 浪费。直接复用最接近的。
+ *
+ * 总结：先找同色系里最接近的，不行再考虑新增。
+ */
 
+:root {
+  /* --- 白色系 --- */
+  --widget-bg: rgba(255, 255, 255, 0.72);
+  --hover-bg: rgba(255, 255, 255, 1);
+  --label-bg: rgba(255, 255, 255, 0.35);
+  --text-shadow-blur: rgba(255, 255, 255, 0.5);
+
+  /* --- 黑色系 --- */
+  --widget-text: #111;
+  --widget-border: rgba(0, 0, 0, 0.08);
+  --shadow: rgba(0, 0, 0, 0.2);
+  --border-subtle: rgba(0, 0, 0, 0.2);
+  --icon-add-shine: rgba(0, 0, 0, 0.75);
+
+  /* --- 彩色 / 中性色 --- */
   --bg: #f5f5f5;
   --accent: #0a6cff;
   --danger: #e0533d;
-  --overlay: rgba(0, 0, 0, 0.3);
-  --shadow: rgba(0, 0, 0, 0.2);
-  --border-subtle: rgba(0, 0, 0, 0.2);
-  --text-shadow-blur: rgba(255, 255, 255, 0.7);
-  --ctrl-h: 40px;
+
+  /* --- 尺寸 --- */
+  --ui-font: 13px;
+  --ui-line-height: 1.4;
+  --ui-height: 26px;
+  --ui-border: 1px;
+  --ui-gap: 4px;
+  --ui-row-gap: 12px;
+  --ui-pad-x: 6px;
+  --ui-pad-y: 3px;
 }
 
 :root[data-theme='dark'] {
-  --panel-bg: rgba(0, 0, 0, 0.68);
-  --panel-text: #eee;
-  --panel-border: rgba(255, 255, 255, 0.08);
+  /* --- 白色系（暗色主题反转 → 黑色 rgba）--- */
+  --widget-bg: rgba(0, 0, 0, 0.68);
   --hover-bg: rgba(0, 0, 0, 1);
-  --active-bg: rgba(0, 0, 0, 1);
+  --label-bg: rgba(0, 0, 0, 0.35);
+  --text-shadow-blur: rgba(0, 0, 0, 0.7);
+
+  /* --- 黑色系（暗色主题反转 → 白色 rgba）--- */
+  --widget-text: #eee;
+  --widget-border: rgba(255, 255, 255, 0.08);
+  --shadow: rgba(255, 255, 255, 0.35);
+  --border-subtle: rgba(255, 255, 255, 0.25);
+  --icon-add-shine: rgba(255, 255, 255, 0.75);
+
+  /* --- 彩色 / 中性色 --- */
   --bg: #111;
   --accent: #4cc2ff;
   --danger: #ff6b55;
-  --overlay: rgba(0, 0, 0, 0.5);
-  --shadow: rgba(0, 0, 0, 0.5);
-  --border-subtle: rgba(255, 255, 255, 0.25);
+}
+
+.force-dark {
+  --widget-bg: rgba(0, 0, 0, 0.68);
+  --hover-bg: rgba(0, 0, 0, 1);
+  --label-bg: rgba(0, 0, 0, 0.35);
   --text-shadow-blur: rgba(0, 0, 0, 0.7);
+  --widget-text: #eee;
+  --widget-border: rgba(255, 255, 255, 0.08);
+  --shadow: rgba(255, 255, 255, 0.35);
+  --border-subtle: rgba(255, 255, 255, 0.25);
+  --icon-add-shine: rgba(255, 255, 255, 0.75);
+  --bg: #111;
+  --accent: #4cc2ff;
+  --danger: #ff6b55;
+}
+.force-light {
+  --widget-bg: rgba(255, 255, 255, 0.72);
+  --hover-bg: rgba(255, 255, 255, 1);
+  --label-bg: rgba(255, 255, 255, 0.35);
+  --text-shadow-blur: rgba(255, 255, 255, 0.5);
+  --widget-text: #111;
+  --widget-border: rgba(0, 0, 0, 0.08);
+  --shadow: rgba(0, 0, 0, 0.2);
+  --border-subtle: rgba(0, 0, 0, 0.2);
+  --icon-add-shine: rgba(0, 0, 0, 0.75);
+  --bg: #f5f5f5;
+  --accent: #0a6cff;
+  --danger: #e0533d;
 }
 
 * {
@@ -53,7 +117,7 @@ body {
   width: 100%;
   height: 100%;
   position: relative;
-  color: var(--panel-text);
+  color: var(--widget-text);
 }
 
 html.mode-popup,
@@ -63,11 +127,12 @@ html.mode-popup body {
   overflow: hidden;
 }
 
-html.mode-popup.ctrl-rows-1 .ui-panel-bl,
-html.mode-popup.ctrl-rows-1 .ui-panel-br {
-  bottom: calc(12px + var(--ctrl-h) + 4px);
+html.mode-popup .ui-widget-bl,
+html.mode-popup .ui-widget-br {
+  bottom: calc(12px + 70px);
 }
-html.mode-popup.ctrl-rows-2 .ui-panel-bl,
-html.mode-popup.ctrl-rows-2 .ui-panel-br {
-  bottom: calc(12px + var(--ctrl-h) * 2 + 8px);
+
+html.mode-popup .ui-widget-ctrl {
+  left: 12px;
+  right: unset;
 }

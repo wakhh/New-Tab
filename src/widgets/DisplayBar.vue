@@ -1,15 +1,15 @@
 <script setup>
 import { computed } from 'vue'
-import UiPanel from '../ui/UiPanel.vue'
+import UiWidget from '../ui/UiWidget.vue'
 import UiRow from '../ui/UiRow.vue'
 import UiSwitch from '../ui/UiSwitch.vue'
 import UiCheck from '../ui/UiCheck.vue'
 import UiText from '../ui/UiText.vue'
 import { t } from '../js/useI18n'
-import { optimize } from '../js/usePersist'
-import { displayMode, desktopAlign, desktopAnchor } from '../js/useVisualState'
+import { displayOptimize } from '../js/usePersist'
+import { displayMode, desktopAlign, desktopAnchor, canDesktopAlign } from '../js/useVisualState'
 import { videoOn, mediaVisualOn, visualType } from '../js/useSourceState'
-import { maximized, viewportW, viewportH ,screenW, screenH, containerW, containerH } from '../js/useVisualState'
+import { viewportW, viewportH, containerW, containerH } from '../js/useVisualState'
 import { currentWallpaper } from '../js/useThemeWallpaper'
 import { viewportRatio, areaRatio, curW, curH, curRatio, isvideoType, curExcess, setDisplayMode } from '../js/useLayoutMode'
 import { tileVideoCount } from '../js/useTileLayout'
@@ -29,9 +29,6 @@ const tileLabel = computed(() => {
 const areaInfo = computed(() => `${containerW.value} x ${containerH.value}`)
 const viewportInfo = computed(() => `${viewportW.value} x ${viewportH.value}`)
 const curInfo = computed(() => curW.value && curH.value ? `${curW.value} x ${curH.value}` : '')
-const viewportAreaDiffers = computed(() => {
-  return viewportW.value !== screenW.value || viewportH.value !== screenH.value
-})
 
 const curTypeKey = computed(() => {
   const kind = visualType.value === 'media-video' || visualType.value === 'wallpaper-video'
@@ -49,8 +46,6 @@ const displayOptions = computed(() =>
   }))
 )
 
-function setDesktopAnchor(v) { desktopAnchor.set(v) }
-
 const cornerOptions = computed(() =>
   ['lt', 'rt', 'lb', 'rb'].map((c) => {
     const map = { lt: '↖', rt: '↗', lb: '↙', rb: '↘' }
@@ -60,7 +55,7 @@ const cornerOptions = computed(() =>
 </script>
 
 <template>
-  <UiPanel panel-id="bl" class="ui-panel-bl">
+  <UiWidget widget-id="bl" class="ui-widget-bl">
     <UiRow>
       <UiText>
         <template v-if="desktopAlign">
@@ -84,7 +79,7 @@ const cornerOptions = computed(() =>
       </UiText>
     </UiRow>
 
-    <UiRow v-if="(currentWallpaper || mediaVisualOn) && viewportRatio === 'landscape' && maximized && viewportAreaDiffers">
+    <UiRow v-if="(currentWallpaper || mediaVisualOn) && canDesktopAlign">
       <UiCheck
         id="wallpaper-desktop-align"
         v-model="desktopAlign"
@@ -92,9 +87,8 @@ const cornerOptions = computed(() =>
       />
       <UiSwitch
         :options="cornerOptions"
-        :model-value="desktopAnchor"
         :prefix="t('cornerOrigin')"
-        @select="setDesktopAnchor"
+        v-model="desktopAnchor"
       />
     </UiRow>
 
@@ -106,14 +100,14 @@ const cornerOptions = computed(() =>
         @select="setDisplayMode"
       />
       <UiCheck
-        id="wallpaper-optimize"
-        v-model="optimize"
-        :label="t('optimize')"
+        id="wallpaper-displayOptimize"
+        v-model="displayOptimize"
+        :label="t('displayOptimize')"
       />
     </UiRow>
-  </UiPanel>
+  </UiWidget>
 </template>
 
 <style scoped>
-.ui-panel-bl { bottom: 12px; left: 12px; }
+.ui-widget-bl { bottom: 12px; left: 12px; }
 </style>

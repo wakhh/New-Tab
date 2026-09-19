@@ -9,11 +9,7 @@
 .ui-text {
   user-select: text;
   cursor: text;
-  min-width: 0;
-}
-
-.ui-text::before {
-  content: 'ⓘ';
-  margin-right: 2px;
+  font-variant-numeric: tabular-nums;
+  background: var(--label-bg);
 }
 </style>

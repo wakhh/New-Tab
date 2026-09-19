@@ -3,7 +3,7 @@ import { musicEl } from './useAudioElement'
 import { videoType } from './useSourceState'
 import { playbackNav } from './useItemNav'
 import { playbackSeek } from './useProgressStore'
-import { selectedSource, visualSource, musicSource } from './usePersist'
+import { selectedSource, mediaVisualSource, musicSource } from './usePersist'
 import { currentWallpaper, wpVideoKey } from './useThemeWallpaper'
 import { showFloatIcon } from './useFloatIcon'
 import { sourceEquals } from '../utils/media'
@@ -46,7 +46,7 @@ export function onLayerWheel(e) {
   const sel = selectedSource.value
   if (sel) {
     const type = sel.type
-    if (type === 'video' && sourceEquals(sel, visualSource.value)) {
+    if (type === 'video' && sourceEquals(sel, mediaVisualSource.value)) {
       const el = videoEl.value
       if (el && Number.isFinite(el.duration) && el.duration > 0) {
         _seekOrNav(el, 'media-visual', isNext ? 30 : -30, 'media-visual')
@@ -70,8 +70,8 @@ export function onLayerWheel(e) {
     }
   }
 
-  if (visualSource.value) {
-    const vtype = visualSource.value.type
+  if (mediaVisualSource.value) {
+    const vtype = mediaVisualSource.value.type
     if (vtype === 'image') {
       playbackNav(isNext ? 'next' : 'prev', 'media-visual')
       return

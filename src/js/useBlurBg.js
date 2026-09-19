@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import { videoPaused, musicPaused, optimize } from './usePersist'
+import { videoPaused, musicPaused, displayOptimize } from './usePersist'
 import { containerW, containerH, displayMode } from './useVisualState'
 import { imgType, videoOn, mediaVisualOn, mediaVisualItem } from './useSourceState'
 import { currentWallpaper } from './useThemeWallpaper'
@@ -92,7 +92,7 @@ function _canSkipBlur() {
 }
 
 function getShowBlur() {
-  if (!optimize.value) return false
+  if (!displayOptimize.value) return false
   const m = displayMode.value
   const scaled = everZoomed.value && m !== 'tile'
 
@@ -120,7 +120,7 @@ function getShowBlur() {
 }
 
 export const showDynamicBlur = computed(() => {
-  if (!optimize.value) return false
+  if (!displayOptimize.value) return false
   const m = displayMode.value
   if (m !== 'fit' && m !== 'center') return false
   if (_canSkipBlur()) return false

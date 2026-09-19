@@ -11,8 +11,12 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
+  gap: var(--ui-row-gap);
   padding: 0;
-  margin: 3px 0;
+  height: auto;
+  pointer-events: none;
+}
+.ui-row > * {
+  pointer-events: auto;
 }
 </style>

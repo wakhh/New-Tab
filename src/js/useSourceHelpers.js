@@ -1,4 +1,4 @@
-import { sourceStates, visualSource, musicSource, selectedSource } from './usePersist'
+import { sourceStates, mediaVisualSource, musicSource, selectedSource } from './usePersist'
 import { displayLists, shuffleLists } from './useMediaLists'
 import { itemId, sourceEquals, sourceOf } from '../utils/media'
 import { currentWallpaper } from './useThemeWallpaper'
@@ -33,7 +33,7 @@ export function pickPrioritySourceKey({ selectedKey, visualKey, musicKey }) {
 
 export function resolveTarget(which, { musicFirst = false } = {}) {
   if (which) return which
-  const vsk = visualSource.value
+  const vsk = mediaVisualSource.value
   const ask = musicSource.value
   const visualCands = vsk ? ['media-visual'] : []
   if (currentWallpaper.value?.isVideo) visualCands.push('wp-video')
@@ -44,11 +44,11 @@ export function resolveTarget(which, { musicFirst = false } = {}) {
 
 export function navTargetSource(which) {
   if (which === 'media-music') return musicSource.value
-  if (which === 'media-visual') return visualSource.value
+  if (which === 'media-visual') return mediaVisualSource.value
   if (which === 'wp-video') return null
   return pickPrioritySourceKey({
     selectedKey: selectedSource.value,
-    visualKey: visualSource.value,
+    visualKey: mediaVisualSource.value,
     musicKey: musicSource.value
   })
 }

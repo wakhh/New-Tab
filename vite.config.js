@@ -10,11 +10,11 @@ export default defineConfig({
   build: {
     outDir: '.build-tmp',
     emptyOutDir: false,
-    sourcemap: false,
+    sourcemap: true,
     minify: true,
     rollupOptions: {
       input: {
-        newtab: resolve(__dirname, 'src/index/newtab.html')
+        newtab: resolve(__dirname, 'src/newtab/newtab.html')
       },
       output: {
         entryFileNames: 'assets/[name].js',

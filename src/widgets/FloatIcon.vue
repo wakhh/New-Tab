@@ -20,8 +20,8 @@ import { floatIcon } from '../js/useFloatIcon'
   position: fixed;
   transform: translate(-50%, -50%);
   font-size: 72px;
-  color: var(--panel-text);
-  text-shadow: -1px -1px 0 var(--panel-bg), 1px -1px 0 var(--panel-bg), -1px 1px 0 var(--panel-bg), 1px 1px 0 var(--panel-bg), 0 2px 12px var(--text-shadow-blur);
+  color: var(--widget-text);
+  text-shadow: -1px -1px 0 var(--widget-bg), 1px -1px 0 var(--widget-bg), -1px 1px 0 var(--widget-bg), 1px 1px 0 var(--widget-bg), 0 2px 12px var(--text-shadow-blur);
   pointer-events: none;
   z-index: 100;
   line-height: 1;

@@ -1,6 +1,9 @@
 {
   "appName": { "message": "Personal New Tab" },
-  "appDesc": { "message": "Personalized new tab with wallpaper and icon management" },
+  "appDesc": { "message": "Personalized new tab with wallpaper and icon management, folder categorization and folder titles\n\nBuilt-in media player supporting local files and online network file lists. Local files require directory junctions (a type of soft link, not hard link). Uninstalling only removes the junction pointers, never affects original files:\n1. Go to edge://extensions/ and copy this extension's ID\n2. Run commands (replace <ID> and <version> with actual extension values, <username> with your Windows login name):\n   CMD: mklink /J \"%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\Extensions\\<ID>\\<version>\\Pictures\" \"C:\\Users\\<username>\\Pictures\"\n   PowerShell: New-Item -ItemType Junction -Path \"$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\Extensions\\<ID>\\<version>\\Pictures\" -Target \"C:\\Users\\<username>\\Pictures\"\n3. Repeat for Music and Videos\n\nAdditional features:\n1. Browser pages auto-pinned to top\n2. Custom new tabs auto-moved to end\n3. Auto-close silent new tabs on switch\n4. Shortcut commands to close tabs before/after/other" },
   "actionTitle": { "message": "Open New Tab" },
-  "cmdOpenNewtabDesc": { "message": "Open new tab popup" }
+  "cmdOpenNewtabDesc": { "message": "Open new tab popup" },
+  "cmdCloseTabsAfterDesc": { "message": "Close all tabs after current" },
+  "cmdCloseTabsBeforeDesc": { "message": "Close all tabs before current" },
+  "cmdCloseOtherTabsDesc": { "message": "Close all other tabs" }
 }

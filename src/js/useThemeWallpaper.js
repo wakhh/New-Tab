@@ -48,8 +48,8 @@ watch(
 
 export function resolveWpSlot(side) {
   return side === 'dark'
-    ? (followLight.value ? 'light' : 'dark')
-    : (followDark.value ? 'dark' : 'light')
+    ? (followDark.value ? 'light' : 'dark')
+    : (followLight.value ? 'dark' : 'light')
 }
 
 export function withWpSrc(rec) {

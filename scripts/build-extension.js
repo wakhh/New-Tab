@@ -12,7 +12,7 @@ const root = resolve(__dirname, '..')
 const tmp = resolve(root, '.build-tmp')
 
 // 根目录中由构建生成/管理的文件与目录（白名单，除此之外一律不动）
-const PRODUCTS = ['newtab.html', 'theme-init.js', 'assets', 'manifest.json', 'background.js', '_locales', 'icons']
+const PRODUCTS = ['newtab.html', 'assets', 'manifest.json', 'background.js', '_locales', 'icons']
 
 const watch = process.argv.includes('--watch')
 
@@ -33,8 +33,8 @@ function sysRm(target) {
 }
 
 async function copyOutput() {
-  // 1. 收集 tmp 中生成的 HTML（在 src/index/ 下，需重命名到根目录）
-  const htmlSrc = resolve(tmp, 'src/index')
+  // 1. 收集 tmp 中生成的 HTML（在 src/newtab/ 下，需重命名到根目录）
+  const htmlSrc = resolve(tmp, 'src/newtab')
   if (existsSync(htmlSrc)) {
     for (const f of readdirSync(htmlSrc)) {
       if (f.endsWith('.html')) {
@@ -48,11 +48,7 @@ async function copyOutput() {
     }
   }
 
-  // 2. theme-init.js：从 src/index/ 直接复制（IIFE 无需 Vite 打包，需在 DOM 渲染前同步执行）
-  const themeInitSrc = resolve(root, 'src/index/theme-init.js')
-  if (existsSync(themeInitSrc)) cpSync(themeInitSrc, resolve(root, 'theme-init.js'), { force: true })
-
-  // 3. assets 目录：整体替换
+  // 2. assets 目录：整体替换
   const assetsSrc = resolve(tmp, 'assets')
   const assetsDest = resolve(root, 'assets')
   sysRm(assetsDest)

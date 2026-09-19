@@ -5,7 +5,8 @@ import { isPortrait } from '../js/useVisualState'
 const props = defineProps({
   label: { type: String, default: '' },
   showShortcut: { type: String, default: '' },
-  title: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['click'])
@@ -13,7 +14,12 @@ const shortcutText = computed(() => props.showShortcut && !isPortrait.value ? pr
 </script>
 
 <template>
-  <span class="ui-column ui-button" :title="title" @click="emit('click')">
+  <span
+    class="ui-column ui-button"
+    :class="{ 'ui-button--disabled': disabled }"
+    :title="title"
+    @click="!disabled && emit('click')"
+  >
     <slot name="icon" />
     {{ label }}<template v-if="shortcutText"> (<u>{{ shortcutText }}</u>)</template>
   </span>
@@ -22,7 +28,7 @@ const shortcutText = computed(() => props.showShortcut && !isPortrait.value ? pr
 <style scoped>
 .ui-button {
   cursor: pointer;
-  color: var(--panel-text);
+  color: var(--widget-text);
 }
 
 .ui-button:hover {
@@ -31,5 +37,11 @@ const shortcutText = computed(() => props.showShortcut && !isPortrait.value ? pr
 
 .ui-button.active {
   color: var(--accent);
+}
+
+.ui-button--disabled {
+  cursor: default;
+  opacity: 0.35;
+  pointer-events: none;
 }
 </style>

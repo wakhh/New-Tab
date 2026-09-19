@@ -1,5 +1,5 @@
 import { ref, watch, nextTick } from 'vue'
-import { mediaImgDuration } from './usePersist'
+import { sourceStates, mediaImgDuration } from './usePersist'
 import { mediaImgOn, mediaVisualItem } from './useSourceState'
 import { MODES, getMode } from './usePlayMode'
 import { sourceOf } from '../utils/media'
@@ -70,3 +70,18 @@ watch(mediaVisualItem, () => {
   if (_ticking) return
   nextTick(_startIfEligible)
 }, { immediate: true })
+
+watch(
+  () => {
+    if (!mediaImgOn.value) return null
+    const item = mediaVisualItem.value
+    if (!item || item.type !== 'image') return null
+    const source = sourceOf(item)
+    if (!source) return null
+    return sourceStates[source.src]?.[source.type]?.playMode?.value ?? null
+  },
+  () => {
+    stopMediaImgTimer()
+    nextTick(_startIfEligible)
+  }
+)

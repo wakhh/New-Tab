@@ -30,7 +30,7 @@ function onChange(e) {
 <style scoped>
 .ui-file-input {
   cursor: pointer;
-  color: var(--panel-text);
+  color: var(--widget-text);
 }
 
 .ui-file-input:hover {

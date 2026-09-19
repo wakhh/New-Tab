@@ -1,5 +1,5 @@
 import {
-  sourceStates, visualSource, musicSource, videoPaused, musicPaused
+  sourceStates, mediaVisualSource, musicSource, videoPaused, musicPaused
 } from './usePersist'
 import { videoEl } from './useVideoElement'
 import { musicEl } from './useAudioElement'
@@ -31,7 +31,7 @@ export function playbackToggle(which, opts = {}) {
   }
 
   const isMusic = target === 'media-music'
-  const source = isMusic ? musicSource.value : visualSource.value
+  const source = isMusic ? musicSource.value : mediaVisualSource.value
   if (!source) return
   const st = _stateOfSource(source)
   if (!st) return
@@ -94,7 +94,7 @@ export function playbackStop(which) {
   }
 
   if (which === 'media-visual' || which === 'visual') {
-    const ok = doStop(visualSource)
+    const ok = doStop(mediaVisualSource)
     if (ok) { showCenterIcon('⏹'); return true }
   }
   if (which === 'media-music' || which === 'music') {
@@ -111,7 +111,7 @@ export function playbackStop(which) {
 
   let stopped = false
   if (musicSource.value) stopped = playbackStop('media-music') || stopped
-  if (visualSource.value) stopped = playbackStop('media-visual') || stopped
+  if (mediaVisualSource.value) stopped = playbackStop('media-visual') || stopped
   if (!stopped && currentWallpaper.value?.isVideo) stopped = playbackStop('wp-video')
   return stopped
 }

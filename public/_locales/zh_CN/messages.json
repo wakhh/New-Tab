@@ -1,6 +1,9 @@
 {
   "appName": { "message": "个人新标签页" },
-  "appDesc": { "message": "可自定义壁纸和图标的个人新标签页" },
+  "appDesc": { "message": "可自定义壁纸和图标的个人新标签页，支持文件夹分类及文件夹标题\n\n内置媒体播放器，支持本地文件播放与在线网络文件列表。本地文件需通过目录联接（软链接的一种，非硬链接）实现，卸载扩展时只会删除联接指针，不会影响原始文件：\n1. 进入 edge://extensions/ 复制本扩展的 ID\n2. 执行以下命令（替换 <ID>、<版本号> 为扩展实际值，<用户名> 为你的 Windows 登录用户名）：\n   命令提示符 CMD: mklink /J \"%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\Extensions\\<ID>\\<版本号>\\Pictures\" \"C:\\Users\\<用户名>\\Pictures\"\n   PowerShell: New-Item -ItemType Junction -Path \"$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\Extensions\\<ID>\\<版本号>\\Pictures\" -Target \"C:\\Users\\<用户名>\\Pictures\"\n3. 将 Pictures 换为 Music、Videos 重复以上步骤即可\n\n另有额外功能：\n1. 浏览器内置页面自动置顶\n2. 自定义新标签页自动移至末尾\n3. 切换标签时自动关闭无声音的新标签页\n4. 关闭前后/其他标签页的快捷键命令" },
   "actionTitle": { "message": "打开新标签页" },
-  "cmdOpenNewtabDesc": { "message": "打开新标签页弹窗" }
+  "cmdOpenNewtabDesc": { "message": "打开新标签页弹窗" },
+  "cmdCloseTabsAfterDesc": { "message": "关闭当前标签页后的所有标签页" },
+  "cmdCloseTabsBeforeDesc": { "message": "关闭当前标签页前的所有标签页" },
+  "cmdCloseOtherTabsDesc": { "message": "关闭其他所有标签页" }
 }

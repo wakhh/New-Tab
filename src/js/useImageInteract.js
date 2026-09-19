@@ -2,7 +2,7 @@ import { displayMode, isPortrait } from './useVisualState'
 import { imgType, imageOn, mediaVisualOn, mediaVisualItem } from './useSourceState'
 import { videoType } from './useSourceState'
 import { getMode, MODES } from './usePlayMode'
-import { visualSource, videoPaused } from './usePersist'
+import { mediaVisualSource, videoPaused } from './usePersist'
 import { playbackNav } from './useItemNav'
 import { playbackToggle } from './usePlayToggle'
 import { showFloatIcon } from './useFloatIcon'
@@ -14,7 +14,7 @@ export function canZoomNow() {
   if (!isImg || isTileMode) return false
   if (imgType.value === 'wallpaper') return true
   if (imgType.value === 'media') {
-    const m = getMode(visualSource.value)
+    const m = getMode(mediaVisualSource.value)
     return m === MODES.SINGLE_PLAY
   }
   return false
@@ -29,7 +29,7 @@ export function handleLayerWheel(e, containerEl) {
       if (imgType.value === 'wallpaper') {
         canZoom = true
       } else if (imgType.value === 'media') {
-        const m = getMode(visualSource.value)
+        const m = getMode(mediaVisualSource.value)
         canZoom = m === MODES.SINGLE_PLAY
       }
       if (canZoom) {
@@ -111,7 +111,7 @@ export function onLayerClick(e) {
       if (ok) showFloatIcon(zone === 'prev' ? '⏮' : '⏭', e.clientX, e.clientY)
       return
     }
-    const isPaused = getMode(visualSource.value) === MODES.SINGLE_PLAY
+    const isPaused = getMode(mediaVisualSource.value) === MODES.SINGLE_PLAY
     if (isPaused) return
     playbackToggle('media-visual', { skipIcon: true, forcePause: true })
     showFloatIcon('▶', e.clientX, e.clientY)

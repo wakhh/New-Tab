@@ -1,4 +1,4 @@
-import { videoProgress, musicProgress, visualSource, musicSource, videoPaused, musicPaused } from './usePersist'
+import { videoProgress, musicProgress, mediaVisualSource, musicSource, videoPaused, musicPaused } from './usePersist'
 import { videoEl, videoElProgress, videoElDuration } from './useVideoElement'
 import { musicEl, musicElProgress, musicElDuration } from './useAudioElement'
 import { musicItem } from './useSourceState'

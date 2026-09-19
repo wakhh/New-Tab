@@ -49,13 +49,12 @@ function onBlur(e) {
 .ui-number {
   display: inline-flex;
   align-items: center;
-  height: 26px;
 }
 .ui-number input {
   width: 32px;
-  height: 20px;
+  height: calc(var(--ui-height) - 6px);
   border: none;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: var(--ui-border) solid var(--border-subtle);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -70,6 +69,6 @@ function onBlur(e) {
 }
 .ui-number-suffix {
   opacity: 0.7;
-  font-size: 12px;
+  font-size: var(--ui-font);
 }
 </style>

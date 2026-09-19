@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { throttle } from '../utils/common'
-import { autoHide, settingsOpen, portraitPanel } from './usePersist'
-import {  visualSource, _displayModeVideo, _displayModeImage, _desktopAlignVideo, _desktopAlignImage, _desktopAnchorVideo, _desktopAnchorImage } from './usePersist'
+import { autoHide, settingsOpen, portraitWidget } from './usePersist'
+import {  mediaVisualSource, _displayModeVideo, _displayModeImage, _desktopAlignVideo, _desktopAlignImage, _desktopAnchorVideo, _desktopAnchorImage } from './usePersist'
 import { currentWallpaper } from './useThemeWallpaper'
 
 export const viewportW = ref(window.innerWidth)
@@ -18,25 +18,24 @@ export function updateScreenSize() {
 }
 
 function detectMaximized() {
-  const s = window.screen
-  const availW = s?.availWidth || 0
-  const availH = s?.availHeight || 0
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  if (!availW || !availH || !vw || !vh) return false
-  return vw >= availW - 60 && vh >= availH - 120
+  const vw = viewportW.value
+  const vh = viewportH.value
+  const sw = screenW.value
+  const sh = screenH.value
+  if (!vw || !vh || !sw || !sh) return false
+  return vw >= sw - 60 && vh >= sh - 200
 }
 
 viewportW.value = window.innerWidth
 viewportH.value = window.innerHeight
-maximized.value = detectMaximized()
 updateScreenSize()
+maximized.value = detectMaximized()
 
 const onResize = throttle(() => {
   viewportW.value = window.innerWidth
   viewportH.value = window.innerHeight
-  maximized.value = detectMaximized()
   updateScreenSize()
+  maximized.value = detectMaximized()
 }, 100)
 
 window.addEventListener('resize', onResize)
@@ -69,8 +68,8 @@ export const edgeBL = computed(() => inBottom.value && inLeft.value)
 export const edgeBR = computed(() => inBottom.value && inRight.value)
 export const edgeBottom = computed(() => inBottom.value)
 
-export const hoveredPanel = ref(null)
-export const panelActive = ref(null)
+export const hoveredWidget = ref(null)
+export const widgetActive = ref(null)
 
 const EDGE_MAP = {
   tl: edgeTL, tr: edgeTR, bl: edgeBL, br: edgeBR, bottom: edgeBottom
@@ -83,29 +82,37 @@ const PANEL_TO_KEY = {
   ctrl: 'control'
 }
 
-export function usePanelVisibility(panelId, opts = {}) {
+export function useWidgetVisibility(widgetId, opts = {}) {
   const { edge } = opts
   const edgeRef = edge ? EDGE_MAP[edge] : null
   return computed(() => {
     if (isPortrait.value) {
       if (!settingsOpen.value) return false
-      const key = PANEL_TO_KEY[panelId]
-      if (key) return portraitPanel.value === key
+      const key = PANEL_TO_KEY[widgetId]
+      if (key) return portraitWidget.value === key
       return true
     }
     if (!settingsOpen.value) return false
     if (!autoHide.value) return true
     if (!mouseInViewport.value) return false
-    if (panelActive.value === panelId) return true
-    return (edgeRef?.value ?? false) || hoveredPanel.value === panelId
+    if (widgetActive.value === widgetId) return true
+    return (edgeRef?.value ?? false) || hoveredWidget.value === widgetId
   })
 }
+
+export const viewportAreaDiffers = computed(() =>
+  viewportW.value !== screenW.value || viewportH.value !== screenH.value
+)
+
+export const canDesktopAlign = computed(() =>
+  viewportW.value > viewportH.value && maximized.value && viewportAreaDiffers.value
+)
 
 export const containerW = computed(() => desktopAlign.value ? screenW.value : viewportW.value)
 export const containerH = computed(() => desktopAlign.value ? screenH.value : viewportH.value)
 
 function _isVideoVisual() {
-  const k = visualSource.value
+  const k = mediaVisualSource.value
   if (k) return k.type === 'video'
   return !!currentWallpaper.value?.isVideo
 }
@@ -122,6 +129,7 @@ export const displayMode = computed({
 
 export const desktopAlign = computed({
   get() {
+    if (!canDesktopAlign.value) return false
     return _isVideoVisual() ? _desktopAlignVideo.value : _desktopAlignImage.value
   },
   set(v) {

@@ -1,7 +1,7 @@
 import {
   wpVideoMuted, videoPaused, mediaVideoMuted, mediaMusicMuted,
   wpVideoVolume, mediaVideoVolume, mediaMusicVolume,
-  visualSource, musicSource
+  mediaVisualSource, musicSource
 } from './usePersist'
 import { currentWallpaper } from './useThemeWallpaper'
 
@@ -37,7 +37,7 @@ export function playbackSetVolume(val, which) {
 export function playbackMuteAll() {
   const targets = []
   if (currentWallpaper.value?.isVideo) targets.push('wp')
-  if (visualSource.value) targets.push('media-video')
+  if (mediaVisualSource.value) targets.push('media-video')
   if (musicSource.value) targets.push('media-music')
   if (targets.length === 0) return
   const anyUnmuted = targets.some(w => !VOLUME_BINDINGS[w].muted.value)

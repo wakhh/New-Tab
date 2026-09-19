@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import { sourceStates, visualSource,musicSource } from './usePersist'
+import { sourceStates, mediaVisualSource,musicSource } from './usePersist'
 import { currentWallpaper } from './useThemeWallpaper'
 import { displayMode } from './useVisualState'
 
@@ -10,7 +10,7 @@ export function resolveOwnedItem(source) {
   return st.selectedItem.value || null
 }
 
-export const mediaVisualItem = computed(() => resolveOwnedItem(visualSource.value))
+export const mediaVisualItem = computed(() => resolveOwnedItem(mediaVisualSource.value))
 
 export const mediaImgOn = computed(() => mediaVisualItem.value?.type === 'image')
 export const mediaVideoOn = computed(() => mediaVisualItem.value?.type === 'video')

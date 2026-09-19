@@ -1,7 +1,8 @@
 import {
   settingsOpen,
+  _settingsSkipPersist,
   selectedSource,
-  visualSource,
+  mediaVisualSource,
   musicSource,
   videoPaused,
   autoHide,
@@ -43,7 +44,7 @@ function getSeekTarget() {
       if (isSeekableEl(el)) return { which: type === 'video' ? 'media-visual' : 'media-music', el }
     }
   }
-  const vsk = visualSource.value
+  const vsk = mediaVisualSource.value
   if (vsk) {
     if (vsk.type === 'video') {
       const el = videoEl.value
@@ -166,7 +167,7 @@ function onKeyDown(e) {
     e.preventDefault(); playbackToggle(null, { musicFirst: false })
   } else if (e.key === 'Enter') {
     e.preventDefault()
-    if (!visualSource.value && !musicSource.value) {
+    if (!mediaVisualSource.value && !musicSource.value) {
       const key = selectedSource.value
       if (key) {
         const item = sourceStates[key.src]?.[key.type]?.selectedItem.value
@@ -176,6 +177,7 @@ function onKeyDown(e) {
       playbackToggle(null, { musicFirst: true })
     }
   } else if (e.key === 's' || e.key === 'S') {
+    if (_settingsSkipPersist.value) return
     e.preventDefault(); settingsOpen.value = !settingsOpen.value
   } else if (e.key === 'h' || e.key === 'H') {
     if (settingsOpen.value) { e.preventDefault(); autoHide.value = !autoHide.value }
@@ -239,7 +241,7 @@ function switchVisualMediaType(type) {
   }
   if (!item) return
 
-  const curVS = visualSource.value
+  const curVS = mediaVisualSource.value
   if (curVS && curVS.src === target.src && curVS.type === target.type) {
     const curItem = sourceStates[curVS.src]?.[curVS.type]?.selectedItem.value
     if (curItem && itemId(curItem) === itemId(item)) return

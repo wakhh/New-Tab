@@ -10,10 +10,11 @@ const props = defineProps({
   prefix: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'update:modelValue'])
 
 function onClick(opt) {
   if (opt.disabled) return
+  emit('update:modelValue', opt.value)
   emit('select', opt.value, props.modelValue === opt.value)
 }
 
@@ -46,7 +47,7 @@ const groupShortcut = computed(() => props.showShortcut && !isPortrait.value ? p
 
 <style scoped>
 .ui-switch {
-  color: var(--panel-text);
+  color: var(--widget-text);
 }
 
 .ui-switch-item {
@@ -65,12 +66,12 @@ const groupShortcut = computed(() => props.showShortcut && !isPortrait.value ? p
 }
 
 .ui-switch-item.ui-muted {
-  color: var(--panel-text);
+  color: var(--widget-text);
   opacity: 0.5;
   cursor: default;
 }
 .ui-switch-item.ui-muted:hover {
-  color: var(--panel-text);
+  color: var(--widget-text);
 }
 
 .ui-divider {

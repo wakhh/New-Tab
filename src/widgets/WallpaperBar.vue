@@ -1,6 +1,6 @@
 <script setup>
-import { computed, watch } from 'vue'
-import UiPanel from '../ui/UiPanel.vue'
+import { ref, computed, watch } from 'vue'
+import UiWidget from '../ui/UiWidget.vue'
 import UiRow from '../ui/UiRow.vue'
 import UiSwitch from '../ui/UiSwitch.vue'
 import UiCheck from '../ui/UiCheck.vue'
@@ -16,6 +16,8 @@ import {
   themeMode,
   urlInput,
   currWallpapers,
+  wallpaperSource,
+  mediaVisualSource,
 } from '../js/usePersist'
 import { mediaVisualItem } from '../js/useSourceState'
 import { wpObjectUrls } from '../js/useThemeWallpaper'
@@ -28,17 +30,24 @@ const DEFAULT_URLS = {
   dark: 'https://res.wx.qq.com/t/webmail/webmail/res/static/images/content-bg-dark.1x.4541f7e.jpg'
 }
 
+let bingIdx = 0
+const BING_MAX = 8
+
 const anotherMode = computed(() => themeMode.value === 'light' ? 'dark' : 'light')
 
 const followOtherVal = computed({
-  get: () => themeMode.value === 'light' ? followDark.value : followLight.value,
+  get: () => themeMode.value === 'light' ? followLight.value : followDark.value,
   set: (v) => {
-    if (themeMode.value === 'light') { followDark.set(!!v); if (v) followLight.set(false) }
-    else { followLight.set(!!v); if (v) followDark.set(false) }
+    if (themeMode.value === 'light') { followLight.set(!!v); if (v) followDark.set(false) }
+    else { followDark.set(!!v); if (v) followLight.set(false) }
+    if (v) mediaVisualSource.set(null)
   }
 })
 
-const hasOtherWallpaper = computed(() => !!currWallpapers.value?.[anotherMode.value])
+const hasOtherWallpaper = computed(() => {
+  const other = anotherMode.value
+  return !!currWallpapers.value?.[other] || wallpaperSource.value?.[other] === 'bing'
+})
 const followingOther = computed(() => !!followOtherVal.value && hasOtherWallpaper.value)
 
 const modeOptions = computed(() => [
@@ -52,6 +61,7 @@ const reuseLabel = computed(() =>
   themeMode.value === 'light' ? t('reuseDarkWallpaper') : t('reuseLightWallpaper')
 )
 const canReuse = computed(() => !followOtherVal.value && hasOtherWallpaper.value)
+const currentSource = computed(() => wallpaperSource.value?.[themeMode.value] || null)
 
 function withSrc(rec) {
   if (!rec) return null
@@ -91,6 +101,7 @@ function reuseVisual() {
   if (!url) return
   setWallpaper({ kind: 'url', url, name: item.filename || item.pathname || t('unnamed'), isVideo: item.type === 'video' })
   followOtherVal.value = false
+  mediaVisualSource.set(null)
 }
 
 const urlInputValue = computed({
@@ -115,6 +126,9 @@ function clearWallpaper() {
   const next = { ...currWallpapers.value }
   next[side] = null
   currWallpapers.set(next)
+  const nextSrc = { ...wallpaperSource.value }
+  nextSrc[side] = null
+  wallpaperSource.set(nextSrc)
 }
 function reuseOther() {
   const side = themeMode.value
@@ -126,6 +140,10 @@ function reuseOther() {
   next[side] = { ...wp, ts: Date.now() }
   currWallpapers.set(next)
   followOtherVal.value = false
+  const nextSrc = { ...wallpaperSource.value }
+  nextSrc[side] = null
+  wallpaperSource.set(nextSrc)
+  mediaVisualSource.set(null)
   return true
 }
 function isVideoUrl(url) {
@@ -142,6 +160,7 @@ function uploadWallpaper(file) {
       wpObjectUrls.value = { ...wpObjectUrls.value, [fileId]: URL.createObjectURL(file) }
       setWallpaper({ kind: 'file', fileId, name: file.name || t('unnamedFile'), isVideo })
       followOtherVal.value = false
+      mediaVisualSource.set(null)
       resolve()
     }).catch(reject)
   })
@@ -156,6 +175,7 @@ function applyUrlWallpaper(url) {
       const name = url.split('/').pop().split('?')[0] || t('unnamedFile')
       setWallpaper({ kind: 'url', url, name, isVideo })
       followOtherVal.value = false
+      mediaVisualSource.set(null)
       resolve()
     }
     if (isVideo) { probe.preload = 'metadata'; probe.onloadedmetadata = () => done(true); probe.onerror = () => done(false) }
@@ -171,10 +191,91 @@ function applyUrl() {
     .then(() => { urlInputValue.value = '' })
     .catch(() => {})
 }
-function setThemeMode(v) { themeMode.set(v) }
 function onFileSelected(file) {
   uploadWallpaper(file).catch(() => {})
 }
+
+async function fetchBingWallpaper(idx = 0) {
+  try {
+    const resp = await fetch(`https://www.bing.com/HPImageArchive.aspx?format=js&idx=${idx}&n=1&mkt=zh-CN`)
+    if (!resp.ok) throw new Error('bing http ' + resp.status)
+    const data = await resp.json()
+    const url = data?.images?.[0]?.url
+    if (!url) throw new Error('bing no url')
+    const fullUrl = `https://www.bing.com${url}`
+    let name = 'Bing'
+    const idMatch = url.match(/[?&]id=([^&]+)/)
+    if (idMatch) name = idMatch[1]
+    else {
+      const last = url.split('/').pop()
+      name = last.split('?')[0] || 'Bing'
+    }
+    return { url: fullUrl, name }
+  } catch (e) { console.warn('[wallpaper] bing failed', e); return null }
+}
+
+async function applyBingWallpaper(idx = 0) {
+  const res = await fetchBingWallpaper(idx)
+  if (!res) return
+  setWallpaper({ kind: 'url', url: res.url, name: res.name, isVideo: false })
+  mediaVisualSource.set(null)
+}
+
+async function applyBingToSlot(slot, idx = 0) {
+  const res = await fetchBingWallpaper(idx)
+  if (!res) return
+  const next = { ...currWallpapers.value }
+  next[slot] = { kind: 'url', url: res.url, name: res.name, isVideo: false, ts: Date.now() }
+  currWallpapers.set(next)
+}
+
+async function enableBingSource() {
+  const side = themeMode.value
+  const nextSrc = { ...wallpaperSource.value }
+  nextSrc[side] = 'bing'
+  wallpaperSource.set(nextSrc)
+}
+
+function selectBing(on) {
+  const side = themeMode.value
+  const nextSrc = { ...wallpaperSource.value }
+  nextSrc[side] = on ? 'bing' : null
+  wallpaperSource.set(nextSrc)
+  if (on) { bingIdx = 0; mediaVisualSource.set(null) }
+}
+
+function randomBing() {
+  bingIdx = (bingIdx + 1) % BING_MAX
+  applyBingWallpaper(bingIdx)
+}
+
+async function ensureBingSlotsLoaded() {
+  const src = wallpaperSource.value
+  if (!src) return
+  for (const slot of ['light', 'dark']) {
+    if (src[slot] !== 'bing') continue
+    const cur = currWallpapers.value?.[slot]
+    const remote = await fetchBingWallpaper(0)
+    if (!remote) continue
+    if (cur && cur.url === remote.url) continue
+    const next = { ...currWallpapers.value }
+    next[slot] = { kind: 'url', url: remote.url, name: remote.name, isVideo: false, ts: Date.now() }
+    currWallpapers.set(next)
+  }
+}
+
+watch(
+  () => [
+    wallpaperSource.loaded.value, currWallpapers.loaded.value,
+    wallpaperSource.value?.light, wallpaperSource.value?.dark,
+    followDark.value, followLight.value,
+    themeMode.value,
+  ],
+  () => {
+    ensureBingSlotsLoaded()
+  },
+  { immediate: true }
+)
 
 watch(
   () => [followLight.loaded.value, followDark.loaded.value],
@@ -184,23 +285,27 @@ watch(
 </script>
 
 <template>
-  <UiPanel panel-id="tl" class="ui-panel-tl">
+  <UiWidget widget-id="tl" class="ui-widget-tl">
     <UiRow>
       <UiSwitch
         :options="modeOptions"
         showShortcut="D"
-        :model-value="themeMode"
-        @select="setThemeMode"
+        v-model="themeMode"
       />
       <UiCheck id="wallpaper-follow-system" v-model="followSystem" :label="t('followSystem')" />
     </UiRow>
 
     <UiRow v-if="hasOtherWallpaper">
       <UiCheck id="wallpaper-follow-other" v-model="followOtherVal" :label="followOtherLabel" />
-      <UiButton v-if="canReuse" :label="reuseLabel" @click="reuseOther()" />
+      <UiButton v-if="canReuse && !currentSource" :label="reuseLabel" @click="reuseOther()" />
     </UiRow>
 
-    <template v-if="!followingOther">
+    <UiRow v-if="!followingOther">
+      <UiCheck id="wallpaper-source-bing" :model-value="currentSource === 'bing'" :label="t('followBingDaily')" @update:model-value="selectBing" />
+      <UiButton v-if="currentSource !== 'bing'" :label="t('switchBingWeekly')" @click="randomBing" />
+    </UiRow>
+
+    <template v-if="!currentSource && !followingOther">
       <UiRow>
         <UiInput class="wp-url" id="wallpaper-url-input" v-model="urlInputValue" :placeholder="t('urlPlaceholder')" @enter="applyUrl" />
         <UiButton :label="t('apply')" @click="applyUrl" />
@@ -212,15 +317,15 @@ watch(
       </UiRow>
 
       <UiRow v-if="currentWallpaper">
-        <UiText class="wp-name">{{ displayName }}</UiText>
+        <UiText class="wp-name" :title="displayName">{{ displayName }}</UiText>
         <UiButton label="✕" @click="clearWallpaper()" />
       </UiRow>
     </template>
-  </UiPanel>
+  </UiWidget>
 </template>
 
 <style scoped>
-.ui-panel-tl { top: 12px; left: 12px; }
+.ui-widget-tl { top: 12px; left: 12px; }
 .wp-url {
   width: 212px;
 }

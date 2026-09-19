@@ -1,12 +1,15 @@
 .ui-column {
   display: block;
   border-radius: 4px;
-  margin: 3px 0;
-  padding: 3px 6px;
-  color: var(--panel-text);
-  background: var(--panel-bg);
+  margin: var(--ui-gap) 0;
+  padding: var(--ui-pad-y) var(--ui-pad-x);
+  color: var(--widget-text);
+  background: var(--widget-bg);
   white-space: nowrap;
-  line-height: 1.5;
+  font-size: var(--ui-font);
+  line-height: var(--ui-line-height);
+  height: var(--ui-height);
+  box-sizing: border-box;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
@@ -15,7 +18,7 @@
 }
 
 .ui-column.active {
-  background: var(--active-bg);
+  background: var(--hover-bg);
   color: var(--accent);
 }
 
@@ -28,6 +31,7 @@
 
 .ui-row > .ui-column {
   flex: 0 0 auto;
+  margin: 0;
 }
 
 .ui-row > .ui-column.grow {

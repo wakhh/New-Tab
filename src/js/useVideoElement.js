@@ -1,6 +1,6 @@
 import { ref, watch, nextTick } from 'vue'
 import {
-  sourceStates, visualSource, videoPaused,
+  sourceStates, mediaVisualSource, videoPaused,
   mediaVideoMuted, mediaVideoVolume, wpVideoMuted, wpVideoVolume, videoLoop
 } from './usePersist'
 import { videoEl, videoElProgress, videoElDuration, videoPlaying } from './usePlaybackState'
@@ -172,7 +172,7 @@ watch(
 )
 
 watch(
-  [visualSource, () => mediaVisualItem.value],
+  [mediaVisualSource, () => mediaVisualItem.value],
   ([newKey]) => {
     if (!newKey) { stopMediaImgTimer(); return }
     const src = newKey.src
