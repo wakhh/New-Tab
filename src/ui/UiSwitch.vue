@@ -1,19 +1,28 @@
 <script setup>
 import { computed } from 'vue'
-import { isPortrait } from '../js/useVisualState'
+import { isPortrait } from '../js/core'
 
 const props = defineProps({
   options: { type: Array, required: true },
   modelValue: { type: String, default: '' },
   showShortcut: { type: String, default: '' },
   showShortcuts: { type: [Array, Object], default: () => [] },
-  prefix: { type: String, default: '' }
+  prefix: { type: String, default: '' },
+  cycle: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['select', 'update:modelValue'])
 
 function onClick(opt) {
   if (opt.disabled) return
+  if (props.cycle && opt.value === props.modelValue) {
+    const opts = props.options.filter((o) => !o.disabled)
+    const idx = opts.findIndex((o) => o.value === opt.value)
+    const next = opts[(idx + 1) % opts.length]
+    emit('update:modelValue', next.value)
+    emit('select', next.value, false)
+    return
+  }
   emit('update:modelValue', opt.value)
   emit('select', opt.value, props.modelValue === opt.value)
 }
@@ -35,7 +44,7 @@ const groupShortcut = computed(() => props.showShortcut && !isPortrait.value ? p
       <span v-if="i > 0" class="ui-divider">|</span>
       <span
         class="ui-switch-item"
-        :class="{ active: modelValue === opt.value, 'ui-muted': opt.disabled }"
+        :class="{ active: modelValue === opt.value, 'ui-switch--disabled': opt.disabled }"
         @click="onClick(opt)"
       >
         {{ opt.label }}<template v-if="optShortcut(opt, i)"> (<u>{{ optShortcut(opt, i) }}</u>)</template>
@@ -65,13 +74,10 @@ const groupShortcut = computed(() => props.showShortcut && !isPortrait.value ? p
   text-underline-offset: 3px;
 }
 
-.ui-switch-item.ui-muted {
+.ui-switch--disabled {
+  pointer-events: none;
   color: var(--widget-text);
   opacity: 0.5;
-  cursor: default;
-}
-.ui-switch-item.ui-muted:hover {
-  color: var(--widget-text);
 }
 
 .ui-divider {

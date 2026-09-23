@@ -1,3 +1,4 @@
+// ====== 默认文件夹 ======
 export const DEFAULT_FOLDERS_EN = [
   { id: 'f_search',  startRow: 0, startCol: 0,  endRow: 10, endCol: 1,  titleTop: 'Search/Social', titleBottom: '' },
   { id: 'f_media',   startRow: 0, startCol: 2,  endRow: 10, endCol: 3,  titleTop: 'Video/Media',   titleBottom: '' },
@@ -5,8 +6,9 @@ export const DEFAULT_FOLDERS_EN = [
   { id: 'f_browser', startRow: 0, startCol: 24, endRow: 7,  endCol: 24, titleTop: 'Browser',       titleBottom: '' }
 ]
 
+// ====== 默认图标 ======
 export const DEFAULT_ICONS_EN = [
-  // ===== Search/Social — col-priority in cols 0-1 =====
+  // ====== Search/Social ======
   { id: 's0', name: 'Google',      fileId: null, iconUrl: 'https://www.google.com/favicon.ico',         url: 'https://www.google.com/search?q=%s',     search: true,  row: 0,  col: 0 },
   { id: 's1', name: 'Bing',        fileId: null, iconUrl: 'https://www.bing.com/favicon.ico',          url: 'https://www.bing.com/search?q=%s',       search: true,  row: 1,  col: 0 },
   { id: 's2', name: 'DuckDuckGo',  fileId: null, iconUrl: 'https://duckduckgo.com/favicon.ico',         url: 'https://duckduckgo.com/?q=%s',           search: true,  row: 2,  col: 0 },
@@ -29,7 +31,7 @@ export const DEFAULT_ICONS_EN = [
   { id: 's18', name: 'IMDb',       fileId: null, iconUrl: 'https://www.imdb.com/favicon.ico',           url: 'https://www.imdb.com/',                  search: false, row: 7,  col: 1 },
   { id: 's19', name: 'Medium',     fileId: null, iconUrl: 'https://medium.com/favicon.ico',             url: 'https://medium.com/',                    search: false, row: 8,  col: 1 },
 
-  // ===== Video/Media — col-priority in cols 2-3 =====
+  // ====== Video/Media ======
   { id: 'm0', name: 'YouTube',     fileId: null, iconUrl: 'https://www.youtube.com/favicon.ico',       url: 'https://www.youtube.com/',               search: false, row: 0,  col: 2 },
   { id: 'm1', name: 'Netflix',     fileId: null, iconUrl: 'https://www.netflix.com/favicon.ico',       url: 'https://www.netflix.com/',               search: false, row: 1,  col: 2 },
   { id: 'm2', name: 'Spotify',     fileId: null, iconUrl: 'https://open.spotify.com/favicon.ico',       url: 'https://open.spotify.com/',              search: false, row: 2,  col: 2 },
@@ -44,7 +46,7 @@ export const DEFAULT_ICONS_EN = [
 
   { id: 'm11', name: 'Archive',    fileId: null, iconUrl: 'https://archive.org/favicon.ico',          url: 'https://archive.org/',                   search: false, row: 0,  col: 3 },
 
-  // ===== Dev Tools — col-priority in cols 4-5 =====
+  // ====== Dev Tools ======
   { id: 'd0', name: 'MDN',         fileId: null, iconUrl: 'https://developer.mozilla.org/favicon.ico', url: 'https://developer.mozilla.org/',         search: false, row: 0,  col: 4 },
   { id: 'd1', name: 'GitHub',      fileId: null, iconUrl: 'https://github.com/favicon.ico',            url: 'https://github.com/',                    search: false, row: 1,  col: 4 },
   { id: 'd2', name: 'Stack Overflow', fileId: null, iconUrl: 'https://stackoverflow.com/favicon.ico', url: 'https://stackoverflow.com/search?q=%s',  search: true,  row: 2,  col: 4 },
@@ -59,7 +61,7 @@ export const DEFAULT_ICONS_EN = [
 
   { id: 'd11', name: 'JSFiddle',   fileId: null, iconUrl: 'https://jsfiddle.net/favicon.ico',        url: 'https://jsfiddle.net/',                  search: false, row: 0,  col: 5 },
 
-  // ===== Browser (built-in) — col 24 far right =====
+  // ====== Browser 内置 ======
   { id: 'b0', name: 'Settings',    fileId: null, iconUrl: '⚙️', url: 'edge://settings',     search: false, row: 0, col: 24 },
   { id: 'b1', name: 'Extensions',  fileId: null, iconUrl: '🧩', url: 'edge://extensions',   search: false, row: 1, col: 24 },
   { id: 'b2', name: 'New Tab',     fileId: null, iconUrl: '📋', url: 'edge://newtab',        search: false, row: 2, col: 24 },

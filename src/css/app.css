@@ -1,3 +1,5 @@
+.cursor-hidden, .cursor-hidden * { cursor: none !important; }
+
 /*
  * === 颜色 & 透明度变量 — 复用原则 ===
  *
@@ -39,8 +41,8 @@
   --ui-line-height: 1.4;
   --ui-height: 26px;
   --ui-border: 1px;
-  --ui-gap: 4px;
-  --ui-row-gap: 12px;
+  --ui-row-gap: 6px;
+  --ui-col-gap: 6px;
   --ui-pad-x: 6px;
   --ui-pad-y: 3px;
 }
@@ -105,12 +107,15 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  font-family: system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
-  font-size: 13px;
+  font-size: var(--ui-font);
+}
+
+html {
+  background: var(--bg);
 }
 
 body {
-  background: var(--bg);
+  background: transparent;
 }
 
 #app {
@@ -127,12 +132,12 @@ html.mode-popup body {
   overflow: hidden;
 }
 
-html.mode-popup .ui-widget-bl,
-html.mode-popup .ui-widget-br {
-  bottom: calc(12px + 70px);
+.ui-button--flash {
+  color: var(--accent) !important;
+  animation: ui-button-flash 1.2s ease-in-out infinite;
 }
 
-html.mode-popup .ui-widget-ctrl {
-  left: 12px;
-  right: unset;
+@keyframes ui-button-flash {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(1.08); }
 }

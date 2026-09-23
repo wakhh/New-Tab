@@ -1,30 +1,26 @@
 <script setup>
 import { computed } from 'vue'
-import UiWidget from '../ui/UiWidget.vue'
-import UiRow from '../ui/UiRow.vue'
 import UiButton from '../ui/UiButton.vue'
 import UiText from '../ui/UiText.vue'
 import UiNumber from '../ui/UiNumber.vue'
-import { t } from '../js/useI18n'
+import { t } from '../js/i18n'
 import {
   mediaVisualSource,
   mediaVideoMuted, mediaVideoVolume, wpVideoMuted, wpVideoVolume,
   mediaMusicMuted, mediaMusicVolume,
   videoLoop, mediaImgDuration
-} from '../js/usePersist'
-import { videoElProgress, videoElDuration, videoPlaying } from '../js/useVideoElement'
-import { musicElProgress, musicElDuration, musicPlaying } from '../js/useAudioElement'
-import { getMode, getDirection, playbackCycleMode } from '../js/usePlayMode'
-import { currentWallpaper } from '../js/useThemeWallpaper'
-import { mediaVisualItem, mediaImgOn, videoOn, mediaVisualOn, musicItem, musicOn } from '../js/useSourceState'
-import { itemId, sourceOf } from '../utils/media'
-import { isPortrait } from '../js/useVisualState'
-import { displayLists } from '../js/useMediaLists'
-import { playbackToggle, playbackStop } from '../js/usePlayToggle'
-import { playbackNav } from '../js/useItemNav'
-import { playbackSeek } from '../js/useProgressStore'
-import { playbackToggleMute, playbackSetVolume } from '../js/useVolumeCtrl'
+} from '../js/persist'
+import {
+  videoElProgress, videoElDuration, videoPlaying,
+  musicElProgress, musicElDuration, musicPlaying,
+  currentWallpaper, isPortrait, mediaImgOn, videoOn, mediaVisualOn, displayMode, viewportW,
+  getLoop, getReverse, isShuffle,
+  playbackCycleMode, playbackCycleDirection, playbackReshuffle, playbackToggle, playbackStop, playbackSeek, playbackToggleMute, playbackSetVolume, mediaVisualItem, musicItem, musicOn, displayLists, playbackNav,
+  itemId, sourceOf
+} from '../js/core'
+import { IS_POPUP } from '../js/persist'
 
+// ====== 视觉源状态 ======
 const isWallpaperVideo = computed(() => !mediaVisualOn.value && !!currentWallpaper.value?.isVideo)
 const isWallpaperImage = computed(() => !mediaVisualOn.value && !isWallpaperVideo.value && !!currentWallpaper.value)
 const hasVisual = computed(() => {
@@ -36,10 +32,9 @@ const hasVisual = computed(() => {
 
 function _canZoomNow() {
   if (isWallpaperImage.value) return true
-  if (mediaImgOn.value && mediaVisualItem.value) {
+  if (mediaImgOn.value && mediaVisualItem.value && displayMode.value !== "tile") {
     const source = sourceOf(mediaVisualItem.value)
-    const m = getMode(source)
-    return m === 'single-play'
+    return !getLoop(source)
   }
   return false
 }
@@ -54,28 +49,24 @@ const visualLabel = computed(() => {
   return ''
 })
 
-const visualPlayMode = computed(() => {
-  if (isWallpaperVideo.value) return videoLoop.value ? 'on' : 'off'
+const visualState = computed(() => {
+  if (isWallpaperVideo.value) return { type: 'wp-video', loop: videoLoop.value, reverse: false, shuffle: false }
   if (mediaVisualOn.value && mediaVisualItem.value) {
     const source = sourceOf(mediaVisualItem.value)
-    return getMode(source)
+    const isImg = mediaImgOn.value
+    return { type: isImg ? 'image' : 'media-video', loop: getLoop(source), reverse: getReverse(source), shuffle: isShuffle(source) }
   }
   return null
 })
-const visualPlayDirection = computed(() => {
-  if (isWallpaperVideo.value) return null
-  if (mediaVisualOn.value && mediaVisualItem.value) {
-    const source = sourceOf(mediaVisualItem.value)
-    return getDirection(source)
-  }
-  return null
+const musicState = computed(() => {
+  if (!musicItem.value) return null
+  const source = sourceOf(musicItem.value)
+  return { type: 'music', loop: getLoop(source), reverse: getReverse(source), shuffle: isShuffle(source) }
 })
 
 const visualPlaying = computed(() => {
   if (mediaVisualOn.value) {
-    if (!videoOn.value) {
-      return getMode(mediaVisualSource.value) !== 'single-play'
-    }
+    if (!videoOn.value) return !!getLoop(mediaVisualSource.value)
     return videoPlaying.value
   }
   if (isWallpaperVideo.value) return videoPlaying.value
@@ -97,46 +88,20 @@ const visualTimeDur = computed(() => {
 const visualCanPlayPause = computed(() => mediaVisualOn.value || isWallpaperVideo.value)
 const visualCanMode = computed(() => mediaVisualOn.value || isWallpaperVideo.value)
 
+// ====== 音乐源状态 ======
 const musicItemSameAsVisual = computed(() => {
   if (!musicItem.value || !mediaVisualItem.value) return false
   return itemId(musicItem.value) === itemId(mediaVisualItem.value)
 })
 const hasMusic = computed(() => musicOn.value && !!musicItem.value && !musicItemSameAsVisual.value)
-const isPopup = globalThis.__IS_POPUP__
 
 const musicLabel = computed(() => {
   if (!musicItem.value) return ''
   const source = sourceOf(musicItem.value)
   return itemLabel(musicItem.value) + listIndexLabel(source, musicItem.value)
 })
-const musicPlayMode = computed(() => {
-  if (!musicItem.value) return null
-  const source = sourceOf(musicItem.value)
-  return getMode(source)
-})
-const musicPlayDirection = computed(() => {
-  if (!musicItem.value) return null
-  const source = sourceOf(musicItem.value)
-  return getDirection(source)
-})
 
-function modeShortcut(mode, isWpVideoWithMusic) {
-  if (!mode) return ''
-  if (isWpVideoWithMusic) return ''
-  const needsDir = mode === 'order-loop' || mode === 'order'
-  return needsDir ? ' J/K' : ' K'
-}
-
-const modeShortcutVisual = computed(() => {
-  if (!visualCanMode.value) return ''
-  return modeShortcut(visualPlayMode.value, isWallpaperVideo.value && hasMusic.value)
-})
-const modeShortcutMusic = computed(() => {
-  if (visualCanMode.value && !isWallpaperVideo.value) return ''
-  if (!hasMusic.value) return ''
-  return modeShortcut(musicPlayMode.value, false)
-})
-
+// ====== 标签与格式化 ======
 function onVisualSeek(e) {
   playbackSeek(Number(e.target.value), isWallpaperVideo.value ? 'wp-video' : 'media-visual')
 }
@@ -155,6 +120,7 @@ function onVolumePointerDown(e, which) {
 
 const visualVolumeKey = computed(() => isWallpaperVideo.value ? 'wp' : 'media-video')
 
+// ====== 标签与格式化 ======
 function fmtTime(s) {
   if (!Number.isFinite(s) || s < 0) s = 0
   const m = Math.floor(s / 60)
@@ -162,31 +128,45 @@ function fmtTime(s) {
   return `${m}:${String(sec).padStart(2, '0')}`
 }
 
-function modeLabelOf(playMode, playDirection, isImg = false) {
-  if (!playMode) return ''
-  if (playMode === 'on') return t('loop')
-  if (playMode === 'off') return t('noLoop')
-  const isReverse = playDirection === 'backward'
-  const map = {
-    'single-loop': t('playModeSingleLoop'),
-    'order-loop': isReverse ? t('playModeReverseLoop') : t('playModeOrderLoop'),
-    'shuffle': t('playModeShuffle'),
-    'single-play': isImg ? t('playModeSinglePlayImg') : t('playModeSinglePlayVideo'),
-    order: isReverse ? t('playModeReversePlay') : t('playModeOrder')
+function onSeekHover(e, dur) {
+  const el = e.currentTarget
+  const rect = el.getBoundingClientRect()
+  const p = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+  const t = p * dur
+  el.title = fmtTime(t)
+}
+
+function modeLabelOf(state) {
+  if (!state) return ''
+  if (state.type === 'wp-video') return state.loop ? t('playModeSingleLoop') : t('playModeSinglePlayVideo')
+  if (!state.loop) {
+    if (state.type === 'image') return t('playModeSinglePlayImg')
+    return t('playModeSingleLoop')
   }
-  return map[playMode] || playMode
+  return state.reverse ? t('playModeReverseLoop') : t('playModeOrderLoop')
+}
+function modeShortcut(state) {
+  if (!state) return ''
+  if (state.type === 'wp-video') return ''
+  if (state.loop) return ' J/K'
+  return ' K'
 }
 
 function srcLabel(source) {
-  return source === 'network' ? t('mediaNetwork') : t('mediaLocal')
+  if (source === 'network') return t('mediaNetwork')
+  if (source === 'dir') return t('mediaDir')
+  return t('mediaLocal')
 }
 
 function itemLabel(item) {
-  const src = srcLabel(item?.url ? 'network' : 'local')
+  let src
+  if (item?.url) src = 'network'
+  else if (item?.dirId) src = 'dir'
+  else src = 'local'
   const type = item?.type === 'music' ? t('music')
             : item?.type === 'video' ? t('video')
             : t('image')
-  return `${src} ${type}`
+  return `${srcLabel(src)} ${type}`
 }
 
 function listIndexLabel(source, item) {
@@ -201,16 +181,16 @@ function listIndexLabel(source, item) {
 </script>
 
 <template>
-  <UiWidget widget-id="ctrl" class="ui-widget-ctrl" :class="{ 'ui-widget-ctrl--shift': !isPopup && !isPortrait &&  hasMusic }" @click.stop>
+  <div class="ui-widget ui-widget-ctrl" data-widget-id="ctrl" @click.stop>
     <template v-if="hasVisual">
       <UiText class="ctrl-label" style="grid-column:1" :title="visualLabel && _canZoomNow() ? '(Ctrl+🖱️)' : ''">
-        {{ visualLabel }}{{ visualLabel && _canZoomNow() ? ' ⚲' : '' }}
+        {{ visualLabel }}{{ visualLabel && _canZoomNow() ? ' 🔎︎' : '' }}
       </UiText>
-      <UiButton v-if="visualCanMode" style="grid-column:2" :label="modeLabelOf(visualPlayMode, visualPlayDirection, mediaImgOn)" :show-shortcut="modeShortcutVisual" @click="playbackCycleMode(isWallpaperVideo ? 'wp-video' : 'media-visual')" />
-      <input v-if="videoOn" style="grid-column:3" class="ctrl-range" type="range" min="0" step="0.1" :max="visualTimeDur || 0" :value="visualTimeCur" title="(Left/Right)" @input="onVisualSeek" @change="$event.target.blur()" />
-      <UiNumber v-if="mediaImgOn" style="grid-column:3" v-model="mediaImgDuration" :min="0.5" :max="3600" :step="0.5" :precision="1" :suffix="t('second')" />
+      <UiButton v-if="visualCanMode" style="grid-column:2" :label="modeLabelOf(visualState)" :show-shortcut="modeShortcut(visualState)" @click="playbackCycleMode(isWallpaperVideo ? 'wp-video' : 'media-visual')" />
+      <input v-if="videoOn" style="grid-column:3" class="ctrl-range" type="range" min="0" step="0.1" :max="visualTimeDur || 0" :value="visualTimeCur" @mousemove="(e) => onSeekHover(e, visualTimeDur)" @mouseleave="(e) => e.currentTarget.title = ''" title="" @input="onVisualSeek" @change="$event.target.blur()" />
+      <UiNumber v-if="mediaImgOn && getLoop(mediaVisualSource)" style="grid-column:3" v-model="mediaImgDuration" :min="0.5" :max="3600" :step="0.5" :precision="1" :suffix="t('second')" />
       <UiText v-if="videoOn" style="grid-column:4" >{{ fmtTime(visualTimeCur) }} / {{ fmtTime(visualTimeDur) }}</UiText>
-      <UiButton v-if="mediaVisualOn" style="grid-column:5" label="⏹" title="(Esc)" @click="playbackStop('media-visual')" />
+      <UiButton v-if="mediaVisualOn" style="grid-column:5" label="⏹" title="(S)" @click="playbackStop('media-visual')" />
       <UiButton v-if="mediaVisualOn" style="grid-column:6" label="⏮" title="(Up)" @click="playbackNav('prev', 'media-visual')" />
       <UiButton v-if="visualCanPlayPause" style="grid-column:7" :label="visualPlaying ? '⏸' : '▶'" title="(Space)" @click="playbackToggle(isWallpaperVideo ? 'wp-video' : 'media-visual')" />
       <UiButton v-if="mediaVisualOn" style="grid-column:8" label="⏭" title="(Down)" @click="playbackNav('next', 'media-visual')" />
@@ -221,15 +201,15 @@ function listIndexLabel(source, item) {
         </template>
       </UiButton>
       <input v-if="videoOn" style="grid-column:10" class="ctrl-range ctrl-volume" type="range" min="0" max="100" :value="visualVolume" title="(-/+)" @input="(e) => onVolumeInput(e, visualVolumeKey)" @change="$event.target.blur()" />
-      <UiText v-if="videoOn" style="grid-column:11" >{{ visualVolume }}%</UiText>
+      <UiNumber v-if="videoOn" style="grid-column:11" :model-value="visualVolume" :min="0" :max="100" suffix="%" @update:model-value="v => playbackSetVolume(v, visualVolumeKey)" />
     </template>
 
     <template v-if="hasMusic">
       <UiText class="ctrl-label" style="grid-column:1">{{ musicLabel }}</UiText>
-      <UiButton style="grid-column:2" :label="modeLabelOf(musicPlayMode, musicPlayDirection)" :show-shortcut="modeShortcutMusic" @click="playbackCycleMode('media-music')" />
-      <input style="grid-column:3" class="ctrl-range" type="range" min="0" step="0.1" :max="musicElDuration || 0" :value="musicElProgress" title="(Left/Right)" @input="onMusicSeek" @change="$event.target.blur()" />
+      <UiButton style="grid-column:2" :label="modeLabelOf(musicState)" :show-shortcut="modeShortcut(musicState)" @click="playbackCycleMode('media-music')" />
+      <input style="grid-column:3" class="ctrl-range" type="range" min="0" step="0.1" :max="musicElDuration || 0" :value="musicElProgress" @mousemove="(e) => onSeekHover(e, musicElDuration)" @mouseleave="(e) => e.currentTarget.title = ''" title="" @input="onMusicSeek" @change="$event.target.blur()" />
       <UiText style="grid-column:4" >{{ fmtTime(musicElProgress) }} / {{ fmtTime(musicElDuration) }}</UiText>
-      <UiButton style="grid-column:5" label="⏹" title="(Esc)" @click="playbackStop('media-music')" />
+      <UiButton style="grid-column:5" label="⏹" title="(S)" @click="playbackStop('media-music')" />
       <UiButton style="grid-column:6" label="⏮" title="(Up)" @click="playbackNav('prev', 'media-music')" />
       <UiButton style="grid-column:7" :label="musicPlaying ? '⏸' : '▶'" title="(Enter)" @click="playbackToggle('media-music')" />
       <UiButton style="grid-column:8" label="⏭" title="(Down)" @click="playbackNav('next', 'media-music')" />
@@ -240,50 +220,24 @@ function listIndexLabel(source, item) {
         </template>
       </UiButton>
       <input style="grid-column:10" class="ctrl-range ctrl-volume" type="range" min="0" max="100" :value="mediaMusicVolume" title="(-/+)" @pointerdown="(e) => onVolumePointerDown(e, 'media-music')" @input="(e) => onVolumeInput(e, 'media-music')" @change="$event.target.blur()" />
-      <UiText style="grid-column:11" >{{ mediaMusicVolume }}%</UiText>
+      <UiNumber style="grid-column:11" :model-value="mediaMusicVolume" :min="0" :max="100" suffix="%" @update:model-value="v => playbackSetVolume(v, 'media-music')" />
     </template>
-  </UiWidget>
+  </div>
 </template>
 
 <style scoped>
 .ui-widget-ctrl {
-  bottom: 12px;
-  left: 0;
-  right: 0;
-  margin: 3px auto;
-  z-index: 30;
-  width: max-content;
   display: grid;
   grid-template-columns: repeat(11, max-content);
   grid-auto-rows: auto;
-  gap: var(--ui-gap) var(--ui-row-gap);
+  gap: var(--ui-row-gap) var(--ui-col-gap);
   align-items: center;
   align-content: center;
   justify-items: start;
 }
-
-.ui-widget-ctrl > .ui-column {
+.ui-widget-ctrl > :deep(*) {
   margin: 0;
-}
-
-.ui-widget-ctrl--shift {
-  transform: translateX(-120px);
-}
-
-:deep(.ctrl-label) {
-  padding: 0 6px;
-  display: inline-flex;
-  align-items: center;
-}
-
-.ctrl-zoom-hint {
-  cursor: default;
-}
-
-:deep(.ui-button),
-:deep(.ui-switch) {
-  display: inline-flex;
-  align-items: center;
+  pointer-events: auto;
 }
 
 .ctrl-range {
@@ -294,19 +248,5 @@ function listIndexLabel(source, item) {
 }
 .ctrl-range.ctrl-volume {
   width: 70px;
-}
-.ctrl-imgdur-spacer {
-  display: inline-block;
-  width: 60px;
-  height: var(--ui-height);
-}
-
-@media (orientation: portrait) {
-  .ctrl-grid {
-    grid-template-columns: auto;
-    grid-template-rows: auto auto;
-    gap: 4px;
-  }
-  .ctrl-imgdur-spacer { display: none; }
 }
 </style>

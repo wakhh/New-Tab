@@ -1,22 +1,56 @@
-// 媒体索引生成脚本（npm run media-index）
-// 遍历 Pictures/Music/Videos 三个文件夹（仅根目录和一级子文件夹），
-// 在项目根目录生成 media-index.json（方便扩展页面 fetch 读取）。
-// 单个文件记录 5 个属性：
-//   path1    根目录名（Pictures | Music | Videos）
-//   path2    一级子文件夹名（根目录下直接文件为 ''）
-//   filename 文件名
-//   mtime    修改时间（毫秒时间戳，供时间排序）
-//   type     媒体类型（image | music | video）
-// 规则：Music 文件夹只收录音乐扩展名；Pictures/Videos 文件夹收录全部三种。
 import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { execSync } from 'node:child_process'
+import { platform } from 'node:os'
+import { IMAGE_EXTS, MUSIC_EXTS, VIDEO_EXTS } from '../src/js/mediaExts.js'
 
+// ====== 常量 ======
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico', 'avif']
-const MUSIC_EXTS = ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'opus']
-const VIDEO_EXTS = ['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv']
+const WIN_KNOWN_FOLDERS = {
+  Pictures: 'My Pictures',
+  Music:    'My Video',
+  Videos:   'My Video',
+}
+
+// ====== Windows 系统文件夹 ======
+function expandEnv(str) {
+  return str.replace(/%([^%]+)%/g, (_, v) => process.env[v] || `%${v}%`)
+}
+
+function getWinKnownFolder(name) {
+  try {
+    const guid = WIN_KNOWN_FOLDERS[name]
+    const out = execSync(
+      `reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders" /v "${guid}"`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+    )
+    const m = out.match(/REG_(?:EXPAND_)?SZ\s+(.+)/)
+    if (!m) return null
+    return expandEnv(m[1].trim())
+  } catch { return null }
+}
+
+function ensureJunction(name) {
+  const linkPath = join(ROOT, name)
+  if (existsSync(linkPath)) return
+  if (platform() !== 'win32') {
+    console.warn(`warn: ${name} 不存在，非 Windows 平台跳过`)
+    return
+  }
+  const target = getWinKnownFolder(name)
+  if (!target || !existsSync(target)) {
+    console.warn(`warn: 无法获取 ${name} 的系统文件夹路径`)
+    return
+  }
+  execSync(`mklink /J "${linkPath}" "${target}"`, { stdio: 'ignore' })
+  console.log(`linked: ${name} -> ${target}`)
+}
+
+for (const name of Object.keys(WIN_KNOWN_FOLDERS)) ensureJunction(name)
+
+// ====== 媒体收集 ======
 const ALL_EXTS = [...IMAGE_EXTS, ...MUSIC_EXTS, ...VIDEO_EXTS]
 
 function detectType(filename, allowedExts) {
@@ -64,6 +98,7 @@ for (const path1 of ['Pictures', 'Music', 'Videos']) {
   }
 }
 
+// ====== 输出 ======
 items.sort((a, b) => b.mtime - a.mtime)
 
 writeFileSync(join(ROOT, 'media-index.json'), JSON.stringify(items) + '\n')

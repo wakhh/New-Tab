@@ -1,3 +1,4 @@
+// ====== 扩展图标 ======
 const SIZES = [16, 32, 48, 128]
 
 function draw(size, fg) {
@@ -40,6 +41,7 @@ try {
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', setupExtIcon)
 } catch {}
 
+// ====== 命令监听 ======
 async function openNewTabPopup(source) {
   const url = chrome.runtime.getURL('newtab.html') + (source ? `?src=${encodeURIComponent(source)}` : '')
   const width = 405
@@ -83,6 +85,7 @@ chrome.commands.onCommand.addListener((command) => {
   }
 })
 
+// ====== 标签页判断 ======
 function _isMyNewTab(url) {
   if (!url) return false
   if (url === 'edge://newtab/' || url === 'chrome://newtab/') return true
@@ -104,6 +107,7 @@ function _isExtensionPage(url) {
   return url.startsWith('chrome-extension://')
 }
 
+// ====== 标签页管理 ======
 function _closeNewTab(tabId, retries = 3) {
   chrome.tabs.remove(tabId).catch(() => {
     if (retries > 0) setTimeout(() => _closeNewTab(tabId, retries - 1), 200)

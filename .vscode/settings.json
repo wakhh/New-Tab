@@ -1,4 +1,18 @@
 {
     "trae.tab.enableRename": false,
-    "trae.tab.enableAutoImport": false
+    "trae.tab.enableAutoImport": false,
+    "files.exclude": {
+        ".build-tmp/": true,
+        "node_modules/": true,
+        "assets/": true,
+        "_locales/": true,
+        "media-index.json": true,
+        "theme-init.js": true,
+        "manifest.json": true,
+        "background.js": true,
+        "newtab.html": true,
+        "Pictures/": true,
+        "Music/": true,
+        "Videos/": true
+    }
 }

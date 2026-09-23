@@ -1,19 +1,18 @@
 <script setup>
 import { computed, ref, onBeforeUnmount } from 'vue'
-import UiWidget from '../ui/UiWidget.vue'
-import UiRow from '../ui/UiRow.vue'
 import UiButton from '../ui/UiButton.vue'
 import UiCheck from '../ui/UiCheck.vue'
 import UiSwitch from '../ui/UiSwitch.vue'
 import UiText from '../ui/UiText.vue'
-import { resetAllSettings, exportSettings, importSettings } from '../js/useStorage'
-import { settingsOpen, _settingsSkipPersist, autoHide, portraitWidget, shortcutIcons, shortcutFolders, desktopMode, iconScale, langPref } from '../js/usePersist'
-import { isPortrait, edgeTR, hoveredWidget, widgetActive, mouseInViewport } from '../js/useVisualState'
-import { t, isBrowserZh, resolveLang } from '../js/useI18n'
-import { DEFAULT_ICONS_ZH, DEFAULT_FOLDERS_ZH } from '../js/defaultDataZh'
-import { DEFAULT_ICONS_EN, DEFAULT_FOLDERS_EN } from '../js/defaultDataEn'
+import UiNumber from '../ui/UiNumber.vue'
+import { resetAllSettings, exportSettings, importSettings } from '../js/storage'
+import { settingsOpen, _settingsSkipPersist, autoHide, portraitWidget, shortcutIcons, shortcutFolders, desktopMode, iconScale, langPref, IS_POPUP } from '../js/persist'
+import { isPortrait, edgeTR, hoveredWidget, widgetActive, mouseInViewport } from '../js/core'
+import { t, isBrowserZh, resolveLang } from '../js/i18n'
+import { DEFAULT_ICONS_ZH, DEFAULT_FOLDERS_ZH } from '../js/zh_desktop'
+import { DEFAULT_ICONS_EN, DEFAULT_FOLDERS_EN } from '../js/en_desktop'
 
-
+// ====== 工具函数 ======
 function isEmptyList(v) {
   return !v || (Array.isArray(v) && v.length === 0)
 }
@@ -40,61 +39,84 @@ function addDefaultIcons() {
     }
     if (lastPos.col < GRID_COLS) break
   }
-  const list = (Array.isArray(DEFAULT_ICONS) ? DEFAULT_ICONS : []).map(i => ({ ...i, type: 'custom' }))
+  const list = (Array.isArray(DEFAULT_ICONS) ? DEFAULT_ICONS : [])
   list.push({ id: '__builtin_add__', name: '', type: 'builtin', fileId: null, iconUrl: '', darkFileId: null, darkIconUrl: '', url: '', search: false, row: lastPos.row, col: lastPos.col })
   shortcutIcons.set(list)
-  shortcutFolders.set(Array.isArray(DEFAULT_FOLDERS) ? [...DEFAULT_FOLDERS] : [])
+  shortcutFolders.set(Array.isArray(DEFAULT_FOLDERS) ? DEFAULT_FOLDERS : [])
   settingsOpen.set(false)
 }
 
+// ====== 图标缩放交互 ======
 const scaleActive = ref(false)
 let scaleFocusTimer = null
 let scaleCloseRaf = null
-let savedSettingsOpen = false
-let scaleInteracted = false
+let scaleTriedEdit = false
+let scaleHovered = false
+let scaleFocused = false
+let scaleLeaveTimer = null
 const SCALE_FOCUS_DELAY = 350
+const SCALE_LEAVE_DELAY = 100
 
-function enterScaleActive() {
-  if (scaleActive.value) return
-  savedSettingsOpen = settingsOpen.value
-  _settingsSkipPersist.value = true
-  settingsOpen.value = false
-  scaleActive.value = true
-}
-
-function exitScaleActive() {
-  if (!scaleActive.value) return
-  _settingsSkipPersist.value = true
-  settingsOpen.value = savedSettingsOpen
-  _settingsSkipPersist.value = false
-  scaleActive.value = false
-  scaleInteracted = false
+function syncScaleActive() {
+  const want = scaleHovered || scaleFocused
+  if (want === scaleActive.value) return
+  if (want) {
+    _settingsSkipPersist.value = true
+    settingsOpen.value = false
+    _settingsSkipPersist.value = false
+  } else {
+    if (!scaleTriedEdit) {
+      _settingsSkipPersist.value = true
+      settingsOpen.value = true
+      _settingsSkipPersist.value = false
+    }
+  }
+  scaleActive.value = want
 }
 
 function onScaleEnter() {
+  scaleHovered = true
+  if (scaleLeaveTimer) { clearTimeout(scaleLeaveTimer); scaleLeaveTimer = null }
   if (scaleCloseRaf) { cancelAnimationFrame(scaleCloseRaf); scaleCloseRaf = null }
   if (scaleFocusTimer) clearTimeout(scaleFocusTimer)
-  scaleInteracted = false
   scaleFocusTimer = setTimeout(() => {
     scaleFocusTimer = null
-    enterScaleActive()
+    syncScaleActive()
   }, SCALE_FOCUS_DELAY)
 }
 
 function onScaleLeave() {
+  scaleHovered = false
   if (scaleFocusTimer) { clearTimeout(scaleFocusTimer); scaleFocusTimer = null }
-  if (scaleInteracted) {
-    savedSettingsOpen = false
-    exitScaleActive()
-  } else {
-    exitScaleActive()
-  }
+  if (scaleLeaveTimer) clearTimeout(scaleLeaveTimer)
+  scaleLeaveTimer = setTimeout(() => {
+    scaleLeaveTimer = null
+    syncScaleActive()
+  }, SCALE_LEAVE_DELAY)
+}
+
+function markTriedEdit() {
+  if (scaleTriedEdit) return
+  scaleTriedEdit = true
+  settingsOpen.remove()
 }
 
 function onScaleInput() {
   if (scaleFocusTimer) { clearTimeout(scaleFocusTimer); scaleFocusTimer = null }
-  scaleInteracted = true
-  enterScaleActive()
+  markTriedEdit()
+  syncScaleActive()
+}
+
+function onScaleFocus() {
+  scaleFocused = true
+  markTriedEdit()
+  if (scaleFocusTimer) { clearTimeout(scaleFocusTimer); scaleFocusTimer = null }
+  syncScaleActive()
+}
+
+function onScaleBlur() {
+  scaleFocused = false
+  syncScaleActive()
 }
 
 onBeforeUnmount(() => {
@@ -103,10 +125,11 @@ onBeforeUnmount(() => {
   if (scaleActive.value) exitScaleActive()
 })
 
+// ====== 组件显隐与事件 ======
 const showWidget = computed(() => {
   if (scaleActive.value) return true
   if (isPortrait.value) return true
-  if (!mouseInViewport.value && autoHide.value) return false
+  if ((!mouseInViewport.value && autoHide.value) || IS_POPUP.value) return false
   if (settingsOpen.value) {
     if (!autoHide.value) return true
     if (widgetActive.value === 'tr') return true
@@ -127,8 +150,8 @@ const autoLabel = isBrowserZh ? '自动' : 'Auto'
 </script>
 
 <template>
-  <UiWidget v-show="showWidget" widget-id="tr" :class="{ 'ui-widget-tr': true,'ui-widget-tr-close': !settingsOpen && !scaleActive && !isPortrait }">
-    <UiRow>
+  <div v-show="showWidget" class="ui-widget" data-widget-id="tr">
+    <div class="ui-row">
       <UiSwitch
         v-if="settingsOpen && !scaleActive && !isPortrait"
         v-model="langPref"
@@ -140,71 +163,49 @@ const autoLabel = isBrowserZh ? '自动' : 'Auto'
         :label="t('autoHide')"
         show-shortcut="H"
       />
-      <UiButton
-        :class="{ 'scale-hidden': scaleActive, 'settings-close-button': !settingsOpen && !scaleActive &&!isPortrait }"
+      <UiButton v-if="!IS_POPUP"
+        :class="{ 'scale-hidden': scaleActive }"
         :label="settingsOpen ? t('closeSettings') : t('openSettings')"
-        :show-shortcut="isPortrait ? '' : 'S'"
+        :show-shortcut="isPortrait ? '' : 'Esc'"
         @click="toggleSettings"
       />
-    </UiRow>
-    <UiRow v-if="(settingsOpen || scaleActive) && !isPortrait">
+    </div>
+    <div class="ui-row" v-if="(settingsOpen || scaleActive) && !isPortrait">
       <UiButton v-if="desktopEmpty && desktopMode === 'icons'" :label="t('addDefaultIcons')" @click="addDefaultIcons" />
       <template v-else-if = "desktopMode === 'icons'">
         <UiText :class="{ 'scale-hidden': scaleActive }">{{ t('iconScale') }}</UiText>
         <input type="range" min="0" max="200" step="5" v-model.number="iconScale" class="icon-scale-slider" @mouseenter="onScaleEnter" @mouseleave="onScaleLeave" @input="onScaleInput" />
-        <UiText>{{ iconScale }}%</UiText>
+        <UiNumber v-model="iconScale" :min="0" :max="200" :step="5" suffix="%" @mouseenter="onScaleEnter" @mouseleave="onScaleLeave" @focus="onScaleFocus" @blur="onScaleBlur" @input="onScaleInput" />
       </template>
       <UiSwitch
         :class="{ 'scale-hidden': scaleActive }"
         v-model="desktopMode"
+        cycle
         :options="[{ value: 'icons', label: t('desktopModeIcons') }, { value: 'cards', label: t('desktopModeCards') }]"
       />
-    </UiRow>
-    <UiRow v-if="settingsOpen && !scaleActive">
+    </div>
+    <div class="ui-row" v-if="settingsOpen && !scaleActive">
       <UiButton :label="t('importSettings')" @click="importSettings" />
       <UiButton :label="t('exportSettings')" @click="exportSettings" />
       <UiButton :label="t('resetAllSettings')" @click="resetAllSettings" />
-    </UiRow>
+    </div>
     <template v-if="settingsOpen && !scaleActive && isPortrait">
-      <UiRow>
+      <div class="ui-row">
         <UiCheck id="pt-wallpaper" :model-value="portraitWidget === 'wallpaper'" :label="t('toggleWallpaperWidget')" @update:model-value="setWidget('wallpaper')" />
-      </UiRow>
-      <UiRow>
+      </div>
+      <div class="ui-row">
         <UiCheck id="pt-display" :model-value="portraitWidget === 'display'" :label="t('toggleDisplayWidget')" @update:model-value="setWidget('display')" />
-      </UiRow>
-      <UiRow>
+      </div>
+      <div class="ui-row">
         <UiCheck id="pt-media" :model-value="portraitWidget === 'media'" :label="t('toggleMediaWidget')" @update:model-value="setWidget('media')" />
-      </UiRow>
-      <UiRow>
+      </div>
+      <div class="ui-row">
         <UiCheck id="pt-control" :model-value="portraitWidget === 'control'" :label="t('toggleControlWidget')" @update:model-value="setWidget('control')" />
-      </UiRow>
+      </div>
     </template>
-  </UiWidget>
+  </div>
 </template>
 
 <style scoped>
-.ui-widget-tr { 
-  top: 12px; 
-  right: 12px;
-}
-.ui-widget-tr-close {
-  margin: 14px 10px;
-  padding: unset;
-}
-.ui-widget-tr > :deep(.ui-row) { justify-content: flex-end !important; }
-.ui-widget-tr-close > :first-child {
-  margin: unset;
-}
 .scale-hidden { visibility: hidden !important; }
-.settings-close-button {
-  margin: unset !important;
-  /* padding: unset !important; */
-}
-.icon-scale-slider {
-  width: 80px;
-  height: 4px;
-  accent-color: var(--accent);
-  cursor: pointer;
-  align-self: center;
-}
 </style>

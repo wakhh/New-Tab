@@ -8,7 +8,7 @@ const props = defineProps({
   suffix: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'focus', 'blur'])
 
 function clamp(n) {
   if (Number.isNaN(n)) n = props.min
@@ -25,6 +25,7 @@ function onInput(e) {
 function onBlur(e) {
   const v = Number(e.target.value)
   emit('update:modelValue', clamp(v))
+  emit('blur')
   e.target.value = props.modelValue
 }
 </script>
@@ -38,6 +39,7 @@ function onBlur(e) {
       :max="max"
       :step="step"
       @input="onInput"
+      @focus="emit('focus')"
       @blur="onBlur"
       @keydown.enter="$event.target.blur()"
     />

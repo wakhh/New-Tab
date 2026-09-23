@@ -1,19 +1,14 @@
 <script setup>
 import { computed } from 'vue'
-import UiWidget from '../ui/UiWidget.vue'
-import UiRow from '../ui/UiRow.vue'
 import UiSwitch from '../ui/UiSwitch.vue'
 import UiCheck from '../ui/UiCheck.vue'
 import UiText from '../ui/UiText.vue'
-import { t } from '../js/useI18n'
-import { displayOptimize } from '../js/usePersist'
-import { displayMode, desktopAlign, desktopAnchor, canDesktopAlign } from '../js/useVisualState'
-import { videoOn, mediaVisualOn, visualType } from '../js/useSourceState'
-import { viewportW, viewportH, containerW, containerH } from '../js/useVisualState'
-import { currentWallpaper } from '../js/useThemeWallpaper'
-import { viewportRatio, areaRatio, curW, curH, curRatio, isvideoType, curExcess, setDisplayMode } from '../js/useLayoutMode'
-import { tileVideoCount } from '../js/useTileLayout'
+import UiButton from '../ui/UiButton.vue'
+import { t } from '../js/i18n'
+import { displayOptimize, mediaRotateMap } from '../js/persist'
+import { displayMode, desktopAlign, desktopAnchor, canDesktopAlign, viewportW, viewportH, containerW, containerH, currentWallpaper, viewportRatio, areaRatio, curW, curH, curRatio, curExcess, setDisplayMode, tileVideoCount, videoOn, mediaVisualOn, visualType, getRotateKey } from '../js/core'
 
+// ====== 标签工具 ======
 const _SUPERSCRIPT = ['⁰','¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹']
 function _toSuperscript(n) {
   return String(n).split('').map(d => _SUPERSCRIPT[+d] || d).join('')
@@ -21,7 +16,7 @@ function _toSuperscript(n) {
 
 const tileLabel = computed(() => {
   const base = t('modeTile')
-  if (!isvideoType.value || tileVideoCount.value <= 1) return base
+  if (!videoOn.value || tileVideoCount.value <= 1) return base
   return base + _toSuperscript(tileVideoCount.value)
 })
 
@@ -35,14 +30,16 @@ const curTypeKey = computed(() => {
     ? 'video'
     : 'image'
   const dir = curRatio.value === 'portrait' ? 'portrait' : curRatio.value === 'landscape' ? 'landscape' : ''
-  return dir ? dir + (kind === 'video' ? 'Video' : 'Image') : kind
+  if (dir) return dir + (kind === 'video' ? 'Video' : 'Image')
+  return kind + 'Resolution'
 })
 
+// ====== 显示选项 ======
 const displayOptions = computed(() =>
   ['fill', 'fit', 'center', 'stretch', 'tile'].map((m) => ({
     value: m,
     label: m === 'tile' ? tileLabel.value : t('mode' + m.charAt(0).toUpperCase() + m.slice(1)),
-    disabled: isvideoType.value && m === 'stretch'
+    disabled: videoOn.value && m === 'stretch'
   }))
 )
 
@@ -52,34 +49,59 @@ const cornerOptions = computed(() =>
     return { value: c, label: map[c] }
   })
 )
+
+const canRotate = computed(() => !!(currentWallpaper || mediaVisualOn))
+const curRotate = computed(() => {
+  const k = getRotateKey()
+  if (!k) return 0
+  const v = mediaRotateMap.value[k]
+  return v === 90 || v === 180 || v === 270 ? v : 0
+})
+function clickRotate() {
+  if (!canRotate.value) return
+  const k = getRotateKey()
+  if (!k) return
+  const old = curRotate.value
+  const next = (old + 90) % 360
+  if (next === 0) {
+    const copy = { ...mediaRotateMap.value }
+    delete copy[k]
+    mediaRotateMap.set(copy)
+  } else {
+    mediaRotateMap.set({ ...mediaRotateMap.value, [k]: next })
+  }
+}
 </script>
 
 <template>
-  <UiWidget widget-id="bl" class="ui-widget-bl">
-    <UiRow>
+  <div class="ui-widget" data-widget-id="bl">
+    <div class="ui-row">
       <UiText>
         <template v-if="desktopAlign">
           <template v-if="areaRatio === 'portrait'">{{ t('screenPortrait') }} </template>
           <template v-else-if="areaRatio === 'landscape'">{{ t('screenLandscape') }} </template>
+          <template v-else>{{ t('screenResolution') }} </template>
           {{ areaInfo }}
         </template>
         <template v-else>
           <template v-if="viewportRatio === 'portrait'">{{ t('viewportPortrait') }} </template>
           <template v-else-if="viewportRatio === 'landscape'">{{ t('viewportLandscape') }} </template>
+          <template v-else>{{ t('viewportResolution') }} </template>
           {{ viewportInfo }}
         </template>
       </UiText>
-    </UiRow>
+    </div>
 
-    <UiRow v-if="currentWallpaper || mediaVisualOn">
+    <div class="ui-row" v-if="currentWallpaper || mediaVisualOn">
       <UiText>
         {{ t(curTypeKey) }}
         {{ curInfo }}
         <template v-if="curExcess">{{ t(curExcess) }}</template>
       </UiText>
-    </UiRow>
+      <UiButton v-if="canRotate" :label="curRotate ? '↺ ' + curRotate + '°' : '↺'" :title="t('rotateCCW')" @click="clickRotate" />
+    </div>
 
-    <UiRow v-if="(currentWallpaper || mediaVisualOn) && canDesktopAlign">
+    <div class="ui-row" v-if="(currentWallpaper || mediaVisualOn) && canDesktopAlign">
       <UiCheck
         id="wallpaper-desktop-align"
         v-model="desktopAlign"
@@ -88,11 +110,12 @@ const cornerOptions = computed(() =>
       <UiSwitch
         :options="cornerOptions"
         :prefix="t('cornerOrigin')"
+        cycle
         v-model="desktopAnchor"
       />
-    </UiRow>
+    </div>
 
-    <UiRow v-if="currentWallpaper || mediaVisualOn">
+    <div class="ui-row" v-if="currentWallpaper || mediaVisualOn">
       <UiSwitch
         :options="displayOptions"
         :model-value="displayMode"
@@ -104,10 +127,9 @@ const cornerOptions = computed(() =>
         v-model="displayOptimize"
         :label="t('displayOptimize')"
       />
-    </UiRow>
-  </UiWidget>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.ui-widget-bl { bottom: 12px; left: 12px; }
 </style>

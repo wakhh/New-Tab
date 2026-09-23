@@ -1,37 +1,36 @@
 <script setup>
 import { ref, computed, watch, reactive, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { isPortrait, viewportW, viewportH } from '../js/useVisualState'
-import { settingsOpen, themeMode, shortcutIcons as icons, shortcutFolders as folders, desktopMode, iconScale } from '../js/usePersist'
-import { useStorage } from '../js/useStorage'
-import { newIconFileId, putIconFile, getIconFile, deleteIconFile } from '../js/useIconStore'
+import { isPortrait, viewportW, viewportH } from '../js/core'
+import { settingsOpen, themeMode, shortcutIcons as icons, shortcutFolders as folders, desktopMode, iconScale, IS_POPUP, emojiScrollPos } from '../js/persist'
+import { useStorage, newIconFileId, putIconFile, getIconFile, deleteIconFile } from '../js/storage'
 import UiButton from '../ui/UiButton.vue'
 import UiIcon from '../ui/UiIcon.vue'
 import UiInput from '../ui/UiInput.vue'
-import UiRow from '../ui/UiRow.vue'
 import UiText from '../ui/UiText.vue'
 import UiSwitch from '../ui/UiSwitch.vue'
-import { t } from '../js/useI18n'
+import UiCheck from '../ui/UiCheck.vue'
+import UiNumber from '../ui/UiNumber.vue'
+import { t } from '../js/i18n'
 
+// ====== 常量 ======
+const _tabsApi = () => typeof browser !== 'undefined' && browser.tabs ? browser.tabs : (typeof chrome !== 'undefined' ? chrome.tabs : null)
 const GRID_ROWS = 11
 const GRID_COLS = 25
 const BUILTIN_ADD_ID = '__builtin_add__'
+const LABEL_H = 26 // keep in sync with --ui-height in app.css
 
+// ====== 图标容器显示 ======
 const showIcons = computed(() => desktopMode.value === 'icons' && !isPortrait.value && !settingsOpen.value && iconsFitViewport.value)
 const iconsFitViewport = ref(true)
 const iconBoxSize = ref(32)
 
+// ====== 内建添加图标占位 ======
 function makeBuiltinAddIcon() {
-  return { id: BUILTIN_ADD_ID, name: '', type: 'builtin', fileId: null, iconUrl: '', darkFileId: null, darkIconUrl: '', url: '', search: false, row: -1, col: -1 }
+  return { id: BUILTIN_ADD_ID, name: '', type: 'builtin', fileId: null, iconUrl: '', darkFileId: null, darkIconUrl: '', url: '', search: false, row: -1, col: -1, autoInvert: false }
 }
 
 function _findFirstEmpty(others) {
-  const occupied = new Set(others.map(i => `${i.row},${i.col}`))
-  for (let c = 0; c < GRID_COLS; c++) {
-    for (let r = 0; r < GRID_ROWS; r++) {
-      if (!occupied.has(`${r},${c}`)) return { row: r, col: c }
-    }
-  }
-  return { row: 0, col: GRID_COLS }
+  return _findFirstEmptyFrom(others, 0, 0)
 }
 
 function _findFirstEmptyFrom(others, startRow, startCol) {
@@ -130,6 +129,7 @@ function truncateLabel(name, maxWidth = 5) {
 }
 
 
+// ====== 图标 blob 缓存 ======
 const iconBlobs = reactive({})
 
 async function loadBlobs() {
@@ -146,31 +146,36 @@ async function loadBlobs() {
   }
 }
 
+// ====== 首次加载 ======
 onMounted(() => {
   if (icons.loaded.value) initIconData()
   else watch(icons.loaded, (loaded) => { if (loaded) initIconData() }, { once: true })
 })
 watch(icons, () => { validateAndFixIcons(); loadBlobs() }, { deep: true })
 
-const _isPopup = !!globalThis.__IS_POPUP__
+// ====== 预览样式 ======
 const popupHighlightIds = ref(new Set())
 const previewIconStyle = computed(() => {
-  if (_isPopup) {
-    return 'width:75px; height:97px; --icon-max:48px; --label-h:26px; --label-font:13px; --icon-pad:7px;'
+  const sz = previewIconSize.value
+  if (IS_POPUP) {
+    const pad = Math.max(0, Math.floor((97 - sz - LABEL_H) / 3))
+    return `width:75px; height:97px; --icon-max:${sz}px; --icon-pad:${pad}px;`
   }
-  const { cellW, cellH } = getCellMetrics()
-  const iconPx = iconBoxSize.value
-  const labelHPx = 26
-  const fontPx = 13
-  const padPx = Math.max(0, Math.floor((cellH - iconPx - labelHPx) / 3))
-  return `width:${cellW}px; height:${cellH}px; --icon-max:${iconPx}px; --label-h:${labelHPx}px; --label-font:${fontPx}px; --icon-pad:${padPx}px;`
+  const { cellW, cellH } = getGridOffset()
+  const padPx = Math.max(0, Math.floor((cellH - sz - LABEL_H) / 3))
+  return `width:${cellW}px; height:${cellH}px; --icon-max:${sz}px; --icon-pad:${padPx}px;`
 })
-const previewIconSize = computed(() => _isPopup ? 48 : iconBoxSize.value)
+const previewIconSize = computed(() => {
+  const base = IS_POPUP ? 48 : iconBoxSize.value
+  const maxPx = IS_POPUP ? 48 : _iconMaxPx
+  return Math.round(Math.max(12, Math.min(maxPx, base * ((form.scale ?? 100) / 100))))
+})
 
-if (globalThis.__IS_POPUP__) {
+// ====== 预填充当前标签页 ======
+if (IS_POPUP) {
   ;(async () => {
     try {
-      const tabsApi = typeof browser !== 'undefined' && browser.tabs ? browser.tabs : (typeof chrome !== 'undefined' ? chrome.tabs : null)
+      const tabsApi = _tabsApi()
       if (!tabsApi) return
       const [tab] = await tabsApi.query({ active: true, currentWindow: true })
       if (!tab || !tab.url) return
@@ -199,6 +204,7 @@ if (globalThis.__IS_POPUP__) {
   })()
 }
 
+// ====== 右键菜单 & 全局事件 ======
 const contextMenu = ref(null)
 let afterCtxMenuFlag = false
 
@@ -216,7 +222,7 @@ function onIconContextMenu(e, iconId) {
   const ic = icons.value.find(i => i.id === iconId)
   if (!ic || ic.type === 'builtin') return
   e.preventDefault()
-  if (globalThis.__IS_POPUP__) {
+  if (IS_POPUP) {
     openEditDialog(iconId)
     return
   }
@@ -253,8 +259,19 @@ function onWindowClick(e) {
 }
 
 function onWindowKey(e) {
-  if (e.key === 'Escape') {
-    closeContextMenu()
+  if (e.key !== 'Escape') return
+  const hasDialog = !!dialog.value
+  const hasMenu = !!contextMenu.value
+  if (!hasDialog && !hasMenu) return
+  e.stopImmediatePropagation()
+  e.preventDefault()
+  if (hasMenu) closeContextMenu()
+  if (hasDialog) {
+    const active = document.activeElement
+    if (active && active.closest && active.closest('.dialog-box-wrapper')) {
+      active.blur()
+      return
+    }
     closeDialog()
     searchEdit.value = null
   }
@@ -281,26 +298,29 @@ function onWindowContextMenu(e) {
   }
 }
 
+// ====== 网格尺寸 & 全局事件注册 ======
 const gridRef = ref(null)
+let _viewFactor = 1
+let _iconMaxPx = 48
+let _cellH = 97
 function updateCellVars() {
   const { cellW, cellH, offsetX, offsetY } = getGridOffset()
+  _cellH = cellH
   const vw = viewportW.value
   const vh = viewportH.value
   iconsFitViewport.value = !(vw < 800 || vh < 600)
 
   const vwFactor = vw / 1600
   const vhFactor = vh / 1200
-  const viewFactor = Math.min(1, Math.max(vwFactor, vhFactor))
+  _viewFactor = Math.min(1, Math.max(vwFactor, vhFactor))
 
   const iconScaleFactor = iconScale.value / 100
 
-  const iconMaxPx = Math.min(cellW, cellH - 26)
-  const iconPx = Math.round(Math.max(12, Math.min(iconMaxPx, 48 * iconScaleFactor * viewFactor)))
-  const fontPx = 13
-  const labelHPx = 26
+  _iconMaxPx = Math.min(cellW, cellH - LABEL_H)
+  const iconPx = Math.round(Math.max(12, Math.min(_iconMaxPx, 48 * iconScaleFactor * _viewFactor)))
   iconBoxSize.value = iconPx
 
-  const padPx = Math.max(0, Math.floor((cellH - iconPx - labelHPx) / 3))
+  const padPx = Math.max(0, Math.floor((cellH - iconPx - LABEL_H) / 3))
 
   const gap = 1
   const totalW = cellW * GRID_COLS + gap * (GRID_COLS - 1)
@@ -313,8 +333,6 @@ function updateCellVars() {
   el.style.setProperty('--grid-offset-x', offsetX + 'px')
   el.style.setProperty('--grid-offset-y', offsetY + 'px')
   el.style.setProperty('--icon-max', iconPx + 'px')
-  el.style.setProperty('--label-h', labelHPx + 'px')
-  el.style.setProperty('--label-font', fontPx + 'px')
   el.style.setProperty('--icon-pad', padPx + 'px')
 }
 
@@ -324,7 +342,7 @@ watch(showIcons, (v) => { if (v) nextTick(updateCellVars) })
 onMounted(() => {
   updateCellVars()
   window.addEventListener('click', onWindowClick)
-  window.addEventListener('keydown', onWindowKey)
+  window.addEventListener('keydown', onWindowKey, true)
   window.addEventListener('resize', () => { closeContextMenu(); updateCellVars() })
   window.addEventListener('scroll', closeContextMenu, true)
   window.addEventListener('mousedown', onWinMouseDownCapture, { capture: true })
@@ -332,7 +350,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   window.removeEventListener('click', onWindowClick)
-  window.removeEventListener('keydown', onWindowKey)
+  window.removeEventListener('keydown', onWindowKey, true)
   window.removeEventListener('resize', closeContextMenu)
   window.removeEventListener('scroll', closeContextMenu, true)
   window.removeEventListener('mousedown', onWinMouseDownCapture, { capture: true })
@@ -341,29 +359,51 @@ onBeforeUnmount(() => {
   window.removeEventListener('mouseup', onWinMouseUp)
 })
 
-const EMPTY_ICON = () => ({ id: '', name: '', type: 'custom', fileId: null, iconUrl: '', darkFileId: null, darkIconUrl: '', url: '', row: -1, col: -1 })
+// ====== dialog 状态 & 表单 ======
+const EMPTY_ICON = () => ({ id: '', name: '', fileId: null, iconUrl: '', darkFileId: null, darkIconUrl: '', url: '', row: -1, col: -1, autoInvert: false, scale: 100 })
 const _INITIAL_HINT = computed(() => t('ic_modeNotice'))
 function _clearErrHint() { if (dialogHint.value !== _INITIAL_HINT.value) dialogHint.value = '' }
 const dialog = ref(null)
 const dialogHint = ref('')
 const dialogBoxRef = ref(null)
 const emojiLayerRef = ref(null)
-const emojiScrollPos = useStorage('shortcut-emoji-scroll', 0)
 let emojiScrollSaveTimer = null
+let _lastRowStart = -1
+let _lastRowEnd = -1
+let _scrollRaf = 0
 function onEmojiLayerScroll() {
-  clearTimeout(emojiScrollSaveTimer)
-  emojiScrollSaveTimer = setTimeout(() => {
-    const layer = emojiLayerRef.value
-    if (!layer) return
-    emojiScrollPos.value = layer.scrollTop
-  }, 200)
+  const layer = emojiLayerRef.value
+  if (!layer) return
+  const vt = layer.scrollTop
+  const vh = layer.clientHeight
+  if (_scrollRaf) return
+  _scrollRaf = requestAnimationFrame(() => {
+    _scrollRaf = 0
+    const sz = emojiSize.value
+    const cols = emojiCols.value
+    const totalRows = Math.ceil(GEMOJI_LIST.length / cols)
+    const startRow = Math.max(0, Math.floor(vt / sz) - BUF_ROWS)
+    const endRow = Math.min(totalRows, Math.ceil((vt + vh) / sz) + BUF_ROWS)
+    if (startRow !== _lastRowStart || endRow !== _lastRowEnd) {
+      _lastRowStart = startRow
+      _lastRowEnd = endRow
+      emojiScrollTop.value = vt
+    }
+    clearTimeout(emojiScrollSaveTimer)
+    emojiScrollSaveTimer = setTimeout(() => {
+      emojiScrollPos.value = vt
+    }, 200)
+  })
 }
 function restoreEmojiScroll() {
   const layer = emojiLayerRef.value
   if (!layer) return
   const mem = emojiScrollPos.value
   if (mem > 0) {
-    layer.scrollTo({ top: mem, behavior: 'smooth' })
+    nextTick(() => {
+      layer.scrollTop = mem
+      emojiScrollTop.value = mem
+    })
   }
 }
 const form = reactive(EMPTY_ICON())
@@ -378,6 +418,7 @@ function resetPreprocess() {
   preprocessed = false
 }
 
+// ====== grapheme 字符解析 ======
 function tryExtractName() {
   if (form.name.trim()) return false
   try {
@@ -400,7 +441,7 @@ function graphemeFromStoredUrl(str) {
 
 function getIconGrapheme(ic) {
   if (ic.type === 'builtin') return null
-  const isDark = dialogTheme.value === 'dark'
+  const isDark = themeMode.value === 'dark'
   const primaryUrl = isDark ? ic.darkIconUrl : ic.iconUrl
   const fallbackUrl = isDark ? ic.iconUrl : ic.darkIconUrl
   if (primaryUrl) {
@@ -419,6 +460,7 @@ function isUrlString(str) {
   try { new URL(str); return true } catch { return false }
 }
 
+// ====== emoji 字符集 ======
 const GEMOJI_RANGES = [
   [0x2200, 0x22FF],
   [0x2300, 0x23FF],
@@ -471,6 +513,63 @@ const GEMOJI_STRIP = (() => {
   return out.join('')
 })()
 
+const GEMOJI_LIST = Array.from(
+  new Intl.Segmenter('en-US', { granularity: 'grapheme' }).segment(GEMOJI_STRIP)
+).map(s => s.segment)
+
+const EMOJI_MIN = 80
+const EMOJI_MAX = 160
+const emojiSize = computed(() => {
+  const s = Math.floor(viewportW.value / 10)
+  return Math.max(EMOJI_MIN, Math.min(EMOJI_MAX, s))
+})
+const BUF_ROWS = 2
+const emojiCols = ref(8)
+const emojiScrollTop = ref(0)
+const emojiViewportH = ref(400)
+
+const totalRows = computed(() => Math.ceil(GEMOJI_LIST.length / emojiCols.value))
+
+const visibleItems = computed(() => {
+  const cols = emojiCols.value
+  const { startRow, endRow } = visibleRange.value
+  const out = []
+  const startIdx = startRow * cols
+  const endIdx = Math.min(GEMOJI_LIST.length, endRow * cols)
+  for (let i = startIdx; i < endIdx; i++) {
+    out.push(i)
+  }
+  return out
+})
+
+const visibleRange = computed(() => {
+  const sz = emojiSize.value
+  const startRow = Math.max(0, Math.floor(emojiScrollTop.value / sz) - BUF_ROWS)
+  const endRow = Math.min(totalRows.value, Math.ceil((emojiScrollTop.value + emojiViewportH.value) / sz) + BUF_ROWS)
+  return { startRow, endRow }
+})
+
+function updateEmojiCols() {
+  const layer = emojiLayerRef.value
+  if (!layer) return
+  const w = layer.clientWidth
+  const sz = emojiSize.value
+  const cols = Math.max(1, Math.floor(w / sz))
+  if (cols !== emojiCols.value) emojiCols.value = cols
+  emojiViewportH.value = layer.clientHeight
+}
+
+let colResizeObserver = null
+function setupEmojiObserver() {
+  updateEmojiCols()
+  if (colResizeObserver) colResizeObserver.disconnect()
+  colResizeObserver = new ResizeObserver(() => updateEmojiCols())
+  if (emojiLayerRef.value) colResizeObserver.observe(emojiLayerRef.value)
+}
+function teardownEmojiObserver() {
+  if (colResizeObserver) { colResizeObserver.disconnect(); colResizeObserver = null }
+}
+
 function pickGrapheme(ch) {
   const isDark = dialogTheme.value === 'dark'
   const oldFileId = isDark ? form.darkFileId : form.fileId
@@ -489,6 +588,7 @@ function pickGrapheme(ch) {
   if (oldFileId && oldFileId !== prevFileId) deleteIconFile(oldFileId).catch(() => {})
 }
 
+// ====== 自动获取 favicon ======
 let faviconTrial = null
 async function tryAutoFavicon() {
   if (form.fileId || form.iconUrl) return
@@ -536,13 +636,27 @@ watch(() => form.url, (val, oldVal) => {
   }
 })
 
+// ====== dialog 预览 ======
 const applyNeedsAttention = computed(() => {
   const isDark = dialogTheme.value === 'dark'
-  const primaryFid = isDark ? form.darkFileId : form.fileId
   const primaryUrl = isDark ? form.darkIconUrl : form.iconUrl
-  const draft = formIconUrlDraft.value
-  if (primaryFid) return !!draft
-  return draft !== (primaryUrl || '')
+  const draft = formIconUrlDraft.value.trim()
+  if (draft) return draft !== primaryUrl
+  return false
+})
+
+const applyOrUnsetEnabled = computed(() => {
+  const isDark = dialogTheme.value === 'dark'
+  const primaryUrl = isDark ? form.darkIconUrl : form.iconUrl
+  const draft = formIconUrlDraft.value.trim()
+  return !!primaryUrl || draft !== primaryUrl
+})
+
+const isClearingIcon = computed(() => {
+  const isDark = dialogTheme.value === 'dark'
+  const primaryUrl = isDark ? form.darkIconUrl : form.iconUrl
+  const draft = formIconUrlDraft.value.trim()
+  return !!primaryUrl && draft === primaryUrl
 })
 
 const previewGrapheme = computed(() => {
@@ -561,23 +675,27 @@ const previewGrapheme = computed(() => {
   return null
 })
 
+const _previewUsingFallback = ref(false)
+const previewInvert = computed(() => !!(form.autoInvert && _previewUsingFallback.value))
+
 function updatePreviewForMode() {
   const isDark = dialogTheme.value === 'dark'
   const primaryFid = isDark ? form.darkFileId : form.fileId
   const primaryUrl = isDark ? form.darkIconUrl : form.iconUrl
   const fallbackFid = isDark ? form.fileId : form.darkFileId
   const fallbackUrl = isDark ? form.iconUrl : form.darkIconUrl
-  if (primaryFid && iconBlobs[primaryFid]) { formPreviewUrl.value = iconBlobs[primaryFid]; return }
+  if (primaryFid && iconBlobs[primaryFid]) { formPreviewUrl.value = iconBlobs[primaryFid]; _previewUsingFallback.value = false; return }
   if (primaryUrl) {
-    if (graphemeFromStoredUrl(primaryUrl) != null) { formPreviewUrl.value = ''; return }
-    formPreviewUrl.value = primaryUrl; return
+    if (graphemeFromStoredUrl(primaryUrl) != null) { formPreviewUrl.value = ''; _previewUsingFallback.value = false; return }
+    formPreviewUrl.value = primaryUrl; _previewUsingFallback.value = false; return
   }
-  if (fallbackFid && iconBlobs[fallbackFid]) { formPreviewUrl.value = iconBlobs[fallbackFid]; return }
+  if (fallbackFid && iconBlobs[fallbackFid]) { formPreviewUrl.value = iconBlobs[fallbackFid]; _previewUsingFallback.value = true; return }
   if (fallbackUrl) {
-    if (graphemeFromStoredUrl(fallbackUrl) != null) { formPreviewUrl.value = ''; return }
-    formPreviewUrl.value = fallbackUrl; return
+    if (graphemeFromStoredUrl(fallbackUrl) != null) { formPreviewUrl.value = ''; _previewUsingFallback.value = true; return }
+    formPreviewUrl.value = fallbackUrl; _previewUsingFallback.value = true; return
   }
   formPreviewUrl.value = ''
+  _previewUsingFallback.value = false
 }
 
 watch(dialogTheme, () => {
@@ -586,6 +704,7 @@ watch(dialogTheme, () => {
 })
 watch(() => [form.fileId, form.darkFileId], updatePreviewForMode, { deep: true })
 
+// ====== dialog 打开关闭 / emoji 交互 / 图标增删改 ======
 function syncDraftForCurrentMode() {
   const isDark = dialogTheme.value === 'dark'
   const raw = isDark ? form.darkIconUrl : form.iconUrl
@@ -614,6 +733,7 @@ function openEditDialog(iconId) {
   const ic = icons.value.find(i => i.id === iconId)
   if (!ic || ic.type === 'builtin') return
   Object.assign(form, ic)
+  form.scale = ic.scale ?? 100
   preprocessed = true
   dialogTheme.value = themeMode.value
   syncDraftForCurrentMode()
@@ -632,6 +752,7 @@ function openEditDialog(iconId) {
 function closeDialog() {
   dialog.value = null
   dialogHint.value = ''
+  _hitCache.clear()
   setTimeout(() => {
     if (form.fileId && form.fileId !== formPrevFileId.value) {
       deleteIconFile(form.fileId).catch(() => {})
@@ -650,64 +771,88 @@ function closeDialog() {
 
 watch(dialog, (val, oldVal) => {
   if (val && !oldVal) {
-    nextTick(() => restoreEmojiScroll())
+    nextTick(() => {
+      setupEmojiObserver()
+      restoreEmojiScroll()
+    })
   }
   if (oldVal) {
     const layer = emojiLayerRef.value
     if (layer) emojiScrollPos.value = layer.scrollTop
+    teardownEmojiObserver()
   }
 })
 
-function hitTestEmoji(p, clientX, clientY) {
-  const textNode = Array.from(p.childNodes).find(n => n.nodeType === 3)
-  if (!textNode) return null
-  const doc = document
-  const text = textNode.textContent
-
-  let caret
-  if (doc.caretRangeFromPoint) {
-    caret = doc.caretRangeFromPoint(clientX, clientY)
-  } else if (doc.caretPositionFromPoint) {
-    const pos = doc.caretPositionFromPoint(clientX, clientY)
-    if (!pos) return null
-    caret = doc.createRange()
-    caret.setStart(pos.offsetNode, pos.offset)
-    caret.setEnd(pos.offsetNode, pos.offset)
-  }
-  if (!caret || !p.contains(caret.startContainer)) return null
-
-  const offset = caret.startOffset
-  const segments = Array.from(new Intl.Segmenter('en-US', { granularity: 'grapheme' }).segment(text))
-
-  for (const seg of segments) {
-    const segEnd = seg.index + seg.segment.length
-    if (offset >= seg.index && offset < segEnd) {
-      const r = doc.createRange()
-      r.setStart(textNode, seg.index)
-      r.setEnd(textNode, segEnd)
-      const rect = r.getBoundingClientRect()
-      if (clientX >= rect.left && clientX <= rect.right &&
-          clientY >= rect.top && clientY <= rect.bottom) {
-        return seg.segment
+function onEmojiLayerClick(e) {
+  const cell = e.target.closest('.emoji-cell')
+  if (cell) {
+    const rect = cell.getBoundingClientRect()
+    const sz = rect.width
+    const px = Math.floor(e.clientX - rect.left)
+    const py = Math.floor(e.clientY - rect.top)
+    const idx = parseInt(cell.dataset.index, 10)
+    const ch = GEMOJI_LIST[idx]
+    if (ch && px >= 0 && py >= 0 && px < sz && py < sz) {
+      const { map, mapSz } = _getAlphaMap(ch, sz)
+      const mx = Math.min(mapSz - 1, Math.floor(px * mapSz / sz))
+      const my = Math.min(mapSz - 1, Math.floor(py * mapSz / sz))
+      if (map[my * mapSz + mx] > 20) {
+        pickGrapheme(ch)
+        return
       }
-      return null
     }
   }
-  return null
+  closeDialog()
 }
 
-function handleEmojiClick(e) {
-  const ch = hitTestEmoji(e.currentTarget, e.clientX, e.clientY)
-  if (ch) pickGrapheme(ch)
-  else closeDialog()
+let _hitCanvas = null
+const _hitCache = new Map()
+
+function _getAlphaMap(ch, sz) {
+  const mapSz = 10
+  const key = ch + '@' + mapSz
+  let entry = _hitCache.get(key)
+  if (entry) return entry
+  if (!_hitCanvas) _hitCanvas = document.createElement('canvas')
+  _hitCanvas.width = mapSz
+  _hitCanvas.height = mapSz
+  const ctx = _hitCanvas.getContext('2d')
+  ctx.clearRect(0, 0, mapSz, mapSz)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  const scale = mapSz / sz
+  ctx.font = `${Math.round(40 * scale)}px "Apple Color Emoji", "Segoe UI Emoji", system-ui, sans-serif`
+  ctx.fillText(ch, mapSz / 2, mapSz / 2)
+  const img = ctx.getImageData(0, 0, mapSz, mapSz).data
+  const map = new Uint8Array(mapSz * mapSz)
+  for (let i = 0, j = 3; i < map.length; i++, j += 4) map[i] = img[j]
+  entry = { map, mapSz }
+  _hitCache.set(key, entry)
+  return entry
 }
 
-let emojiHoverThrottled = false
-function onEmojiStringMousemove(e) {
-  if (emojiHoverThrottled) return
-  emojiHoverThrottled = true
-  e.currentTarget.style.cursor = hitTestEmoji(e.currentTarget, e.clientX, e.clientY) ? 'pointer' : 'default'
-  setTimeout(() => { emojiHoverThrottled = false }, 12)
+let _hoverThrottle = false
+function onEmojiLayerMousemove(e) {
+  if (_hoverThrottle) return
+  _hoverThrottle = true
+  requestAnimationFrame(() => {
+    _hoverThrottle = false
+    const cell = e.target.closest('.emoji-cell')
+    const layer = emojiLayerRef.value
+    if (!cell || !layer) return
+    const rect = cell.getBoundingClientRect()
+    const sz = rect.width
+    const px = Math.floor(e.clientX - rect.left)
+    const py = Math.floor(e.clientY - rect.top)
+    if (px < 0 || py < 0 || px >= sz || py >= sz) { layer.style.cursor = 'auto'; return }
+    const idx = parseInt(cell.dataset.index, 10)
+    const ch = GEMOJI_LIST[idx]
+    if (!ch) { layer.style.cursor = 'auto'; return }
+    const { map, mapSz } = _getAlphaMap(ch, sz)
+    const mx = Math.min(mapSz - 1, Math.floor(px * mapSz / sz))
+    const my = Math.min(mapSz - 1, Math.floor(py * mapSz / sz))
+    layer.style.cursor = map[my * mapSz + mx] > 20 ? 'pointer' : 'auto'
+  })
 }
 
 function getNextEmptyPos() {
@@ -752,7 +897,7 @@ async function handleFileUpload(e) {
     e.target.value = ''
     return
   }
-  const isDark = themeMode.value === 'dark'
+  const isDark = dialogTheme.value === 'dark'
   const img = new Image()
   const url = URL.createObjectURL(file)
   img.onload = async () => {
@@ -785,18 +930,21 @@ async function handleFileUpload(e) {
 }
 
 function applyIconUrl() {
-  const isDark = themeMode.value === 'dark'
+  const isDark = dialogTheme.value === 'dark'
   const raw = formIconUrlDraft.value.trim()
-  if (raw && !isSingleGrapheme(raw)) {
-    try { new URL(raw) } catch { dialogHint.value = t('ic_invalidImgUrl'); return }
+  if (isClearingIcon.value) {
+    if (isDark) form.darkIconUrl = ''; else form.iconUrl = ''
+  } else {
+    if (raw && !isSingleGrapheme(raw)) {
+      try { new URL(raw) } catch { dialogHint.value = t('ic_invalidImgUrl'); return }
+    }
+    const oldFileId = isDark ? form.darkFileId : form.fileId
+    const prevFileId = isDark ? formPrevDarkFileId.value : formPrevFileId.value
+    if (isDark) { form.darkIconUrl = raw; form.darkFileId = null }
+    else { form.iconUrl = raw; form.fileId = null }
+    if (oldFileId && oldFileId !== prevFileId) deleteIconFile(oldFileId).catch(() => {})
   }
-  const oldFileId = isDark ? form.darkFileId : form.fileId
-  if (isDark) { form.darkFileId = null; form.darkIconUrl = raw }
-  else { form.fileId = null; form.iconUrl = raw }
   _clearErrHint()
-  const prevFileId = isDark ? formPrevDarkFileId.value : formPrevFileId.value
-  if (oldFileId && oldFileId !== prevFileId) deleteIconFile(oldFileId).catch(() => {})
-  formIconUrlDraft.value = raw
   updatePreviewForMode()
 }
 
@@ -823,16 +971,18 @@ function addOrSaveIcon() {
 
   const payload = {
     id: form.id || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    name,
-    type: 'custom',
-    fileId: form.fileId,
-    iconUrl: form.fileId ? '' : form.iconUrl,
-    darkFileId: form.darkFileId || null,
-    darkIconUrl: form.darkFileId ? '' : form.darkIconUrl,
     url,
-    search: isSearch,
     row: pos.row,
-    col: pos.col
+    col: pos.col,
+    ...(name ? { name } : {}),
+    ...(form.type && form.type !== 'custom' ? { type: form.type } : {}),
+    ...(form.fileId ? { fileId: form.fileId } : {}),
+    ...(!form.fileId && form.iconUrl ? { iconUrl: form.iconUrl } : {}),
+    ...(form.darkFileId ? { darkFileId: form.darkFileId } : {}),
+    ...(!form.darkFileId && form.darkIconUrl ? { darkIconUrl: form.darkIconUrl } : {}),
+    ...(isSearch ? { search: true } : {}),
+    ...(form.autoInvert ? { autoInvert: true } : {}),
+    ...((form.scale ?? 100) !== 100 ? { scale: form.scale } : {})
   }
 
   if (form.fileId && !iconBlobs[form.fileId]) {
@@ -859,11 +1009,9 @@ function addOrSaveIcon() {
   }
   ensureBuiltinOnAddOrDrag(icons.value)
 
-  formPrevFileId.value = null
-  formPrevDarkFileId.value = null
-  dialog.value = null
-  Object.assign(form, EMPTY_ICON())
-  formPreviewUrl.value = ''
+  formPrevFileId.value = form.fileId || null
+  formPrevDarkFileId.value = form.darkFileId || null
+  closeDialog()
 }
 
 function deleteIcon(iconId) {
@@ -900,11 +1048,29 @@ function getIconImgSrc(ic) {
   return ''
 }
 
+function _isUsingFallback(ic) {
+  if (ic.type === 'builtin') return false
+  const isDark = themeMode.value === 'dark'
+  const primaryFid = isDark ? ic.darkFileId : ic.fileId
+  const primaryUrl = isDark ? ic.darkIconUrl : ic.iconUrl
+  if (primaryFid || primaryUrl) return false
+  const fallbackFid = isDark ? ic.fileId : ic.darkFileId
+  const fallbackUrl = isDark ? ic.iconUrl : ic.darkIconUrl
+  return !!(fallbackFid || fallbackUrl)
+}
+
+function _iconInvert(ic) {
+  if (ic.type === 'builtin') return false
+  if (!ic.autoInvert) return false
+  return _isUsingFallback(ic)
+}
+
+// ====== 搜索与标签页操作 ======
 const searchEdit = ref(null)
 const searchInput = ref('')
 
 async function _findExistingTab(url) {
-  const tabsApi = typeof browser !== 'undefined' && browser.tabs ? browser.tabs : (typeof chrome !== 'undefined' ? chrome.tabs : null)
+  const tabsApi = _tabsApi()
   if (!tabsApi) return null
   try {
     const tabs = await tabsApi.query({})
@@ -913,7 +1079,7 @@ async function _findExistingTab(url) {
 }
 
 async function openInCurrentTab(url) {
-  const tabsApi = typeof browser !== 'undefined' && browser.tabs ? browser.tabs : (typeof chrome !== 'undefined' ? chrome.tabs : null)
+  const tabsApi = _tabsApi()
   if (tabsApi) {
     try {
       const existing = await _findExistingTab(url)
@@ -930,7 +1096,7 @@ async function openInCurrentTab(url) {
 }
 
 async function openInNewTab(url, active = false, dedupe = true) {
-  const tabsApi = typeof browser !== 'undefined' && browser.tabs ? browser.tabs : (typeof chrome !== 'undefined' ? chrome.tabs : null)
+  const tabsApi = _tabsApi()
   if (tabsApi) {
     try {
       if (dedupe) {
@@ -967,10 +1133,10 @@ function onIconClick(e, ic) {
   if (ic.type === 'builtin') {
     e.stopPropagation()
     openAddDialog()
-    if (globalThis.__IS_POPUP__) popupPrefillFromTab()
+    if (IS_POPUP) popupPrefillFromTab()
     return
   }
-  if (globalThis.__IS_POPUP__) {
+  if (IS_POPUP) {
     e.stopPropagation()
     openEditDialog(ic.id)
   } else if (ic.search) {
@@ -1017,19 +1183,13 @@ function cancelSearch() {
   searchInput.value = ''
 }
 
-function getCellMetrics() {
-  const vw = viewportW.value
-  const vh = viewportH.value
-  const cellW = Math.floor(vw / GRID_COLS) - 1
-  const cellH = Math.floor(vh / GRID_ROWS) - 1
-  return { cellW: Math.max(cellW, 0), cellH: Math.max(cellH, 0) }
-}
-
+// ====== 网格几何 ======
 function getGridOffset() {
   const vw = viewportW.value
   const vh = viewportH.value
+  const cellW = Math.max(0, Math.floor(vw / GRID_COLS) - 1)
+  const cellH = Math.max(0, Math.floor(vh / GRID_ROWS) - 1)
   const gap = 1
-  const { cellW, cellH } = getCellMetrics()
   const totalW = cellW * GRID_COLS + gap * (GRID_COLS - 1)
   const totalH = cellH * GRID_ROWS + gap * (GRID_ROWS - 1)
   return { offsetX: Math.floor((vw - totalW) / 2), offsetY: Math.floor((vh - totalH) / 2), gap, cellW, cellH }
@@ -1056,6 +1216,7 @@ function pxToGrid(x, y) {
   return { row, col }
 }
 
+// ====== 拖拽 ======
 const selection = ref(null)
 let dragState = null
 const iconDrag = ref(null)
@@ -1068,6 +1229,16 @@ watch(hoverLockedId, (val) => {
 let didIconDrag = false
 let pendingDrag = null
 let _iconPressStart = 0
+let _selectionJustFinished = false
+
+function _blockNextClick() {
+  const handler = (e) => {
+    e.stopPropagation()
+    e.preventDefault()
+    window.removeEventListener('click', handler, true)
+  }
+  window.addEventListener('click', handler, true)
+}
 const DRAG_HOLD_MS = 250
 
 function clearPendingDrag() {
@@ -1173,8 +1344,8 @@ function onIconMouseDown(e, ic) {
   const parentFolder = folders.value.find(f => pointInFolder(ic.row, ic.col, f))
   if (!parentFolder || !folderHasTitle(parentFolder)) {
     const px = gridToPx(ic.row, ic.col)
-    const thresholdX = viewportW.value / 25 * 0.3
-    const thresholdY = viewportH.value / 11 * 0.3
+    const thresholdX = viewportW.value / GRID_COLS * 0.3
+    const thresholdY = viewportH.value / GRID_ROWS * 0.3
     const dx = Math.abs(e.clientX - (px.left + (px.right - px.left) / 2))
     const dy = Math.abs(e.clientY - (px.top + (px.bottom - px.top) / 2))
     if (dx > thresholdX || dy > thresholdY) {
@@ -1204,7 +1375,7 @@ async function popupPrefillFromTab(existingTab) {
   try {
     let tab = existingTab
     if (!tab) {
-      const tabsApi = typeof browser !== 'undefined' && browser.tabs ? browser.tabs : (typeof chrome !== 'undefined' ? chrome.tabs : null)
+      const tabsApi = _tabsApi()
       if (!tabsApi) return
       ;[tab] = await tabsApi.query({ active: true, currentWindow: true })
     }
@@ -1299,6 +1470,7 @@ function onIconDragUp(e) {
   ensureBuiltinOnAddOrDrag(icons.value)
 }
 
+// ====== 文件夹 ======
 function folderAreaOnlyOne(startRow, startCol, endRow, endCol) {
   return startRow === endRow && startCol === endCol
 }
@@ -1366,6 +1538,7 @@ function onWinMouseUp(e) {
   const sel = selection.value
   dragState = null
   if (!sel) return
+  _blockNextClick()
   selection.value = null
   const { startRow, startCol, endRow, endCol } = sel
   const newRect = { startRow, startCol, endRow, endCol }
@@ -1395,6 +1568,7 @@ function onWinMouseUp(e) {
   })
 }
 
+// ====== 样式 getter ======
 function getFolderWrapperStyle(f) {
   const p1 = gridToPx(f.startRow, f.startCol)
   const p2 = gridToPx(f.endRow, f.endCol)
@@ -1429,6 +1603,15 @@ const selectionStyle = computed(() => {
   }
 })
 
+function _calcIconPx(scalePct) {
+  const iconScaleFactor = (iconScale.value / 100) * ((scalePct ?? 100) / 100)
+  return Math.round(Math.max(12, Math.min(_iconMaxPx, 48 * iconScaleFactor * _viewFactor)))
+}
+
+function _calcIconPad(iconPx) {
+  return Math.max(0, Math.floor((_cellH - iconPx - LABEL_H) / 3))
+}
+
 function getCellStyle(ic) {
   const drag = iconDrag.value
   const isDragging = drag && drag.iconId === ic.id
@@ -1445,10 +1628,14 @@ function getCellStyle(ic) {
       gridRow: undefined
     }
   }
-  return {
-    gridColumn: ic.col + 1,
-    gridRow: ic.row + 1
+  const ret = { gridColumn: ic.col + 1, gridRow: ic.row + 1 }
+  const s = ic.scale ?? 100
+  if (s !== 100) {
+    const ipx = _calcIconPx(s)
+    ret['--icon-max'] = ipx + 'px'
+    ret['--icon-pad'] = _calcIconPad(ipx) + 'px'
   }
+  return ret
 }
 
 function getDragPreviewStyle() {
@@ -1495,23 +1682,23 @@ function getDragPreviewStyle() {
             <UiText class="icon-label">{{ t('ic_addIconLabel') }}</UiText>
           </template>
           <template v-else>
-            <UiIcon :grapheme="getIconGrapheme(ic)" :src="getIconImgSrc(ic)" :text="ic.name ? truncateLabel(ic.name, 4) : '?'" :size="iconBoxSize" />
+            <UiIcon :grapheme="getIconGrapheme(ic)" :src="getIconImgSrc(ic)" :text="ic.name ? truncateLabel(ic.name, 4) : '?'" :size="_calcIconPx(ic.scale)" :invert="_iconInvert(ic)" />
             <template v-if="contextMenu === ic.id">
-              <div class="icon-ctx-row" @click.stop @contextmenu.stop>
+              <div class="ui-row icon-ctx-row" @click.stop @contextmenu.stop>
                 <UiButton class="ctx-btn ctx-btn--danger" label="✕" :title="t('ic_deleteTitle')" @click="deleteIcon(ic.id)" />
                 <UiButton class="ctx-btn" label="✎" :title="t('ic_editTitle')" @click="openEditDialog(ic.id)" />
               </div>
             </template>
             <template v-else-if="searchEdit === ic.id">
-              <input
-                class="search-edit-input"
+              <UiInput
                 v-model="searchInput"
                 :placeholder="t('ic_searchPlaceholder')"
-                @keydown.enter.prevent="submitSearch"
-                @keydown.esc.prevent="cancelSearch"
+                class="search-edit-uiinput"
+                @enter="submitSearch"
+                @esc="cancelSearch"
               />
             </template>
-            <UiText v-else-if="ic.name" class="icon-label">{{ ic.name }}{{ ic.search ? ' ⌕' : '' }}</UiText>
+            <UiText v-else-if="ic.name" class="icon-label">{{ ic.name }}{{ ic.search ? ' 🔍︎' : '' }}</UiText>
           </template>
         </div>
       </template>
@@ -1554,37 +1741,64 @@ function getDragPreviewStyle() {
       <div v-show="dialog" class="dialog-overlay" @click.self="!_dialogMousedownInside && closeDialog()" @contextmenu.stop>
         <div ref="dialogBoxRef" class="dialog-box-wrapper" @click.stop @contextmenu.stop @mousedown="_dialogMousedownInside = true">
           <div class="dialog-box" @click.stop>
-            <div class="dialog-icon-preview-wrap" :class="dialogTheme === 'dark' ? 'force-dark' : 'force-light'">
-              <label class="icon-cell dialog-preview-cell" :title="t('ic_uploadTitle')" :style="'cursor:pointer; ' + previewIconStyle">
-                <UiIcon :grapheme="previewGrapheme" :src="formPreviewUrl" :text="form.name ? truncateLabel(form.name, 4) : '?'" :size="previewIconSize" />
-                <UiText v-if="form.name" class="icon-label">{{ form.name }}{{ form.url.includes('%s') ? ' ⌕' : '' }}</UiText>
-                <input type="file" accept="image/*" class="dialog-upload-input" @change="handleFileUpload" />
-              </label>
-            </div>
-            <div class="dialog-fields">
-              <div class="dialog-row">
-                <UiInput v-model="form.url" class="dialog-url" :placeholder="t('ic_urlPlaceholder')" @enter="addOrSaveIcon" />
+            <label
+              class="icon-cell dialog-preview-icon"
+              :class="dialogTheme === 'dark' ? 'force-dark' : 'force-light'"
+              :title="t('ic_uploadTitle')"
+              :style="'cursor:pointer; ' + previewIconStyle"
+            >
+              <UiIcon :grapheme="previewGrapheme" :src="formPreviewUrl" :text="form.name ? truncateLabel(form.name, 4) : '?'" :size="previewIconSize" :invert="previewInvert" />
+              <UiText v-if="form.name" class="icon-label">{{ form.name }}{{ form.url.includes('%s') ? ' 🔍︎' : '' }}</UiText>
+              <input type="file" accept="image/*" class="dialog-upload-input" @change="handleFileUpload" />
+            </label>
+            <div class="ui-widget">
+              <div class="ui-row">
+                <UiSwitch
+                  cycle
+                  :options="[{ value: 'light', label: t('dialogLightStyle') }, { value: 'dark', label: t('dialogDarkStyle') }]"
+                  v-model="dialogTheme"
+                />
               </div>
-              <div class="dialog-row">
-                <UiInput v-model="formIconUrlDraft" :placeholder="t('ic_iconUrlPlaceholder')" @blur="validateFormIconUrl" />
-                <UiButton :label="t('apply')" :class="{ 'ui-button--flash': applyNeedsAttention }" :disabled="!applyNeedsAttention" @click="applyIconUrl" />
+              <div class="ui-row">
+                <UiCheck :modelValue="form.autoInvert" :label="t('ic_autoInvert')" @update:modelValue="form.autoInvert = $event" />
               </div>
-              <div class="dialog-row">
-                <UiInput v-model="form.name" :placeholder="t('ic_namePlaceholder')" />
-                <UiButton :label="dialog?.mode === 'edit' ? t('ic_save') : t('add')" @click="addOrSaveIcon" />
+              <div class="ui-row">
+                <UiText>{{ t('iconScale') }}</UiText>
+                <input type="range" min="0" max="200" step="5" v-model.number="form.scale" class="icon-scale-slider" />
+                <UiNumber v-model="form.scale" :min="0" :max="200" :step="5" suffix="%" />
               </div>
             </div>
           </div>
-          <UiRow class="dialog-footer">
-            <UiSwitch
-              :options="[{ value: 'light', label: t('lightMode') }, { value: 'dark', label: t('darkMode') }]"
-              v-model="dialogTheme"
-            />
-            <UiText v-if="dialogHint" class="dialog-hint">{{ dialogHint }}</UiText>
-          </UiRow>
+          <div class="ui-widget">
+            <div class="ui-row">
+              <UiInput v-model="form.url" class="dialog-url" :placeholder="t('ic_urlPlaceholder')" @enter="addOrSaveIcon" />
+            </div>
+            <div class="ui-row">
+              <UiInput v-model="formIconUrlDraft" class="dialog-icon-url" :placeholder="t('ic_iconUrlPlaceholder')" @blur="validateFormIconUrl" />
+              <UiButton :label="isClearingIcon ? t('ic_unset') : t('apply')" :class="{ 'ui-button--flash': applyNeedsAttention }" :disabled="!applyOrUnsetEnabled" @click="applyIconUrl" />
+            </div>
+            <div class="ui-row">
+              <UiInput v-model="form.name" :placeholder="t('ic_namePlaceholder')" />
+              <UiButton :label="dialog?.mode === 'edit' ? t('ic_save') : t('add')" @click="addOrSaveIcon" />
+            </div>
+          </div>
+          <UiText class="dialog-hint dialog-hint-outer" :style="{ visibility: dialogHint ? 'visible' : 'hidden' }">{{ dialogHint || ' ' }}</UiText>
         </div>
-        <div ref="emojiLayerRef" class="dialog-grapheme-layer" @click.stop @mousedown="_dialogMousedownInside = true" @scroll="onEmojiLayerScroll">
-          <p class="emoji-string" @click="handleEmojiClick" @mousemove="onEmojiStringMousemove">{{ GEMOJI_STRIP }}</p>
+        <div ref="emojiLayerRef" class="dialog-grapheme-layer" @click.stop="onEmojiLayerClick" @mousemove="onEmojiLayerMousemove" @mousedown="_dialogMousedownInside = true" @scroll="onEmojiLayerScroll">
+          <div class="emoji-spacer" :style="{ height: totalRows * emojiSize + 'px', width: (emojiCols * emojiSize + emojiSize / 2) + 'px' }">
+            <span
+              v-for="idx in visibleItems"
+              :key="idx"
+              class="emoji-cell"
+              :data-index="idx"
+              :style="{
+                top: Math.floor(idx / emojiCols) * emojiSize + 'px',
+                left: (idx % emojiCols) * emojiSize + (Math.floor(idx / emojiCols) % 2 === 1 ? emojiSize / 2 : 0) + 'px',
+                width: emojiSize + 'px',
+                height: emojiSize + 'px',
+              }"
+            >{{ GEMOJI_LIST[idx] }}</span>
+          </div>
         </div>
       </div>
     </Transition>
@@ -1607,7 +1821,6 @@ function getDragPreviewStyle() {
   inset: 0;
   border: 1.5px solid var(--widget-text);
   border-radius: 6px;
-  box-sizing: border-box;
   background: var(--hover-bg);
   opacity: 0.12;
   pointer-events: none;
@@ -1633,7 +1846,6 @@ function getDragPreviewStyle() {
   opacity: 0;
   transition: opacity 120ms ease;
   display: inline-block;
-  font-family: inherit;
   font-size: var(--ui-font);
   color: var(--widget-text);
   white-space: nowrap;
@@ -1644,7 +1856,6 @@ function getDragPreviewStyle() {
   background: var(--widget-bg);
   line-height: var(--ui-line-height);
   outline: none;
-  box-sizing: border-box;
   font-stretch: normal;
   letter-spacing: 0.2px;
   width: 32px;
@@ -1677,7 +1888,7 @@ function getDragPreviewStyle() {
 .folder-title-clear {
   display: none;
   position: absolute;
-  right: -24px;
+  right: calc(-1 * var(--ui-height) - var(--ui-col-gap));
   top: 50%;
   transform: translateY(-50%);
   pointer-events: auto;
@@ -1714,7 +1925,6 @@ function getDragPreviewStyle() {
 
 .selection-border {
   border-radius: 6px;
-  box-sizing: border-box;
   pointer-events: auto;
   background-color: var(--hover-bg);
   opacity: 0.12;
@@ -1793,7 +2003,6 @@ body.icons-hover-locked .icon-cell:not(.icon-cell--hover-locked):hover {
 .drag-preview {
   border: 1.5px dashed var(--widget-text);
   border-radius: 6px;
-  box-sizing: border-box;
 }
 
 .drag-preview--in-folder {
@@ -1801,8 +2010,7 @@ body.icons-hover-locked .icon-cell:not(.icon-cell--hover-locked):hover {
 }
 
 .icon-label {
-  font-size: var(--label-font);
-  height: var(--label-h);
+  margin: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1813,46 +2021,32 @@ body.icons-hover-locked .icon-cell:not(.icon-cell--hover-locked):hover {
   background: transparent;
 }
 
-.search-edit-input {
-  pointer-events: auto;
+.search-edit-uiinput {
   align-self: center;
   width: 90%;
   max-width: 120px;
-  height: var(--ui-height);
-  border: 1px solid var(--widget-border);
-  border-radius: 4px;
-  padding: 0 6px;
-  font-family: inherit;
-  font-size: var(--ui-font);
-  color: var(--widget-text);
-  line-height: var(--ui-line-height);
-  background: var(--widget-bg);
-  outline: none;
   text-align: center;
-  font-stretch: normal;
-  letter-spacing: 0.2px;
-  flex-shrink: 0;
+}
+.search-edit-uiinput :deep(.ui-input-field) {
+  width: 100%;
+  text-align: center;
 }
 
 .icon-ctx-row {
-  display: flex;
-  flex-direction: row;
-  gap: var(--ui-gap);
-  pointer-events: auto;
-  height: var(--label-h);
+  height: var(--ui-height);
   align-self: center;
+  pointer-events: auto;
 }
 
 :deep(.ctx-btn.ui-button) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--label-h);
-  height: var(--label-h);
+  width: var(--ui-height);
+  height: var(--ui-height);
   border-radius: 3px;
   padding: 0;
-  margin: 0;
-  font-size: var(--label-font);
+  font-size: var(--ui-font);
   font-weight: bold;
   color: var(--widget-text);
   background: var(--widget-bg);
@@ -1953,6 +2147,10 @@ body.icons-hover-locked .icon-cell:not(.icon-cell--hover-locked):hover {
 .dialog-overlay > .dialog-box-wrapper {
   position: relative;
   z-index: 1;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-row-gap);
 }
 .dialog-box {
   position: relative;
@@ -1962,30 +2160,26 @@ body.icons-hover-locked .icon-cell:not(.icon-cell--hover-locked):hover {
   padding: 24px;
   display: flex;
   gap: 24px;
-  min-width: 520px;
-  max-width: 92vw;
   box-shadow: 0 8px 32px var(--shadow);
+  pointer-events: auto;
+}
+.dialog-box-wrapper > .ui-widget {
+  background: var(--label-bg);
+  border: 1px solid var(--widget-border);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 8px 32px var(--shadow);
+  pointer-events: auto;
+  overflow: hidden;
 }
 
-.dialog-icon-preview-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
+.dialog-preview-icon {
   flex-shrink: 0;
-}
-.dialog-preview-cell {
+  border-radius: 6px;
+  border: 1.5px dashed color-mix(in srgb, var(--widget-text) 70%, transparent);
 }
 .dialog-upload-input {
   display: none;
-}
-
-.dialog-fields {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
 }
 
 .dialog-grapheme-layer {
@@ -2008,19 +2202,23 @@ body.icons-hover-locked .icon-cell:not(.icon-cell--hover-locked):hover {
 .dialog-grapheme-layer::-webkit-scrollbar-track {
   background: transparent;
 }
-.emoji-string {
-  margin: 0;
-  font-size: 22px;
-  line-height: 96px;
-  letter-spacing: 42px;
-  word-break: break-all;
+.emoji-spacer {
+  position: relative;
+  margin: 0 auto;
+}
+.emoji-cell {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  line-height: 1;
   user-select: none;
   -webkit-user-select: none;
   color: var(--widget-text);
   opacity: 0.85;
-  cursor: pointer;
-  padding: 16px 0 16px 64px;
-  text-align: center;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', system-ui, sans-serif;
+  overflow: hidden;
 }
 
 .dialog-emoji-fade-enter-active,
@@ -2032,44 +2230,19 @@ body.icons-hover-locked .icon-cell:not(.icon-cell--hover-locked):hover {
   opacity: 0;
 }
 
-.dialog-footer {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-row-gap);
-  margin-top: 8px;
-  font-size: 11px;
-  color: var(--widget-text);
-}
-
 .dialog-hint {
   opacity: 0.75;
 }
-
-.ui-button--flash {
-  color: var(--accent) !important;
-  animation: ui-button-flash 1.2s ease-in-out infinite;
+.dialog-hint-outer {
+  text-align: center;
+  width: 371px;
 }
 
-@keyframes ui-button-flash {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.55; transform: scale(1.08); }
+.dialog-box-wrapper :deep(.ui-input-field) {
+  width: 260px;
 }
-
-.dialog-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.dialog-row :deep(.ui-column) {
-  font-size: var(--ui-font);
-  height: var(--ui-height);
-}
-.dialog-row :deep(.ui-input) {
-  flex: 1;
-  min-width: 0;
-}
-.dialog-row :deep(.ui-input-field) {
-  width: 100%;
+.dialog-icon-url {
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', system-ui, sans-serif;
 }
 
 .dialog-fade-enter-active,
@@ -2079,17 +2252,5 @@ body.icons-hover-locked .icon-cell:not(.icon-cell--hover-locked):hover {
 .dialog-fade-enter-from,
 .dialog-fade-leave-to {
   opacity: 0;
-}
-
-html.mode-popup .icon-label-search {
-  width: 7px;
-  height: 7px;
-}
-html.mode-popup .dialog-box .icon-label {
-  letter-spacing: 0.2px;
-}
-html.mode-popup .dialog-box .icon-label-search {
-  width: 11px;
-  height: 11px;
 }
 </style>

@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { isPortrait } from '../js/useVisualState'
+import { isPortrait } from '../js/core'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -30,6 +30,10 @@ function onClick() {
   color: var(--widget-text);
 }
 
+.ui-check:hover {
+  color: var(--accent);
+}
+
 .ui-check-box {
   display: inline-block;
   width: 14px;
@@ -42,7 +46,7 @@ function onClick() {
   transition: border-color 0.15s;
 }
 
-.ui-check-box.checked::after {
+.ui-check-box::after {
   content: '';
   position: absolute;
   left: 3px;
@@ -52,6 +56,20 @@ function onClick() {
   border: solid var(--widget-text);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
+  opacity: 0;
+  transition: border-color 0.15s;
+}
+
+.ui-check-box.checked::after {
+  opacity: 1;
+}
+
+.ui-check:hover .ui-check-box {
+  border-color: var(--accent);
+}
+
+.ui-check:hover .ui-check-box::after {
+  border-color: var(--accent);
 }
 
 .ui-check-label {

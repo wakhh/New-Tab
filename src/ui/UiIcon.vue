@@ -6,9 +6,7 @@ const props = defineProps({
   grapheme: { type: String, default: '' },
   text: { type: String, default: '' },
   size: { type: String, default: '' },
-  fontSize: { type: String, default: '' },
-  imgStyle: { type: Object, default: () => ({}) },
-  textStyle: { type: Object, default: () => ({}) },
+  invert: { type: Boolean, default: false },
 })
 
 const slots = useSlots()
@@ -16,18 +14,11 @@ const hasSlot = computed(() => !!slots.default?.())
 const hasSrc = computed(() => !hasSlot.value && !!props.src)
 const isGrapheme = computed(() => !hasSlot.value && !props.src && !!props.grapheme)
 const placeholder = computed(() => !hasSlot.value && !props.src && !props.grapheme && !!props.text)
-
-const iconBoxStyle = computed(() => {
-  if (!props.size) return {}
-  const n = parseFloat(props.size)
-  const v = isNaN(n) ? props.size : n + 'px'
-  return { width: v, height: v, aspectRatio: '1 / 1' }
-})
+const _invertOn = computed(() => props.invert && (hasSrc.value || isGrapheme.value))
 
 const _BOX = computed(() => {
-  if (!props.size) return 32
   const n = parseFloat(props.size)
-  return isNaN(n) ? 32 : n
+  return isNaN(n) ? props.size : n + 'px'
 })
 
 const _textWidthFactor = computed(() => {
@@ -36,96 +27,49 @@ const _textWidthFactor = computed(() => {
   return Math.max(0.6, w || 1)
 })
 
-const autoFontSize = computed(() => {
-  if (props.fontSize) return props.fontSize
-  if (isGrapheme.value) return Math.round(_BOX.value * 0.85) + 'px'
+const _textFontSize = computed(() => {
+  if (isGrapheme.value) return Math.round(parseFloat(_BOX.value) * 0.85) + 'px'
   if (placeholder.value) {
     const f = Math.min(0.85, 0.85 / _textWidthFactor.value)
-    return Math.round(_BOX.value * f) + 'px'
+    return Math.round(parseFloat(_BOX.value) * f) + 'px'
   }
-  return ''
+  return undefined
 })
-
-const mergedTextStyle = computed(() => ({
-  fontSize: autoFontSize.value || undefined,
-  ...props.textStyle,
-}))
-
-const mergedImgStyle = computed(() => ({ ...props.imgStyle }))
 </script>
 
 <template>
-  <span v-if="iconBoxStyle.width" class="ui-icon ui-icon-box" :style="iconBoxStyle">
-    <img
-      v-if="hasSrc"
-      :src="src"
-      class="ui-icon ui-icon-img"
-      referrerpolicy="no-referrer"
-      :style="mergedImgStyle"
-    />
-    <span
-      v-else-if="isGrapheme"
-      class="ui-icon ui-icon-grapheme"
-      :style="mergedTextStyle"
-    >{{ grapheme }}</span>
-    <span
-      v-else-if="placeholder"
-      class="ui-icon ui-icon-text"
-      :style="mergedTextStyle"
-    >{{ text }}</span>
-    <span v-else class="ui-icon ui-icon-slot"><slot /></span>
+  <span class="ui-icon ui-icon-box" :style="{ width: _BOX, height: _BOX, aspectRatio: '1 / 1' }">
+    <img v-if="hasSrc" :src="src" class="ui-icon-img" :class="{ 'ui-icon-invert': _invertOn }" referrerpolicy="no-referrer" />
+    <span v-else-if="isGrapheme" class="ui-icon-grapheme" :class="{ 'ui-icon-invert': _invertOn }" :style="{ fontSize: _textFontSize }">{{ grapheme }}</span>
+    <span v-else-if="placeholder" class="ui-icon-text" :style="{ fontSize: _textFontSize }">{{ text }}</span>
+    <span v-else class="ui-icon-slot"><slot /></span>
   </span>
-  <template v-else>
-    <img
-      v-if="hasSrc"
-      :src="src"
-      class="ui-icon ui-icon-img"
-      referrerpolicy="no-referrer"
-      :style="mergedImgStyle"
-    />
-    <span
-      v-else-if="isGrapheme"
-      class="ui-icon ui-icon-grapheme"
-      :style="mergedTextStyle"
-    >{{ grapheme }}</span>
-    <span
-      v-else-if="placeholder"
-      class="ui-icon ui-icon-text"
-      :style="mergedTextStyle"
-    >{{ text }}</span>
-    <span v-else class="ui-icon ui-icon-slot"><slot /></span>
-  </template>
 </template>
 
 <style scoped>
-.ui-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  line-height: 1;
-}
-
 .ui-icon-box {
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
   flex-shrink: 0;
+  line-height: 1;
+  overflow: visible;
 }
-
 .ui-icon-img {
   width: 100%;
   height: 100%;
   aspect-ratio: 1 / 1;
   object-fit: contain;
 }
-
 .ui-icon-grapheme {
   font-weight: normal;
   background: transparent;
+  line-height: 1.2;
+  display: block;
+  color: var(--widget-text);
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', system-ui, sans-serif;
 }
-
 .ui-icon-text {
   color: var(--widget-text);
   background: var(--label-bg);
@@ -135,13 +79,13 @@ const mergedImgStyle = computed(() => ({ ...props.imgStyle }))
   display: flex;
   align-items: center;
   justify-content: center;
-  box-sizing: border-box;
   white-space: nowrap;
-  line-height: 1;
   font-weight: 500;
 }
-
 .ui-icon-slot {
   background: transparent;
+}
+.ui-icon-invert {
+  filter: invert(1);
 }
 </style>

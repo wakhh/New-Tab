@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { isPortrait } from '../js/useVisualState'
+import { isPortrait } from '../js/core'
 
 const props = defineProps({
   label: { type: String, default: '' },

@@ -1,5 +1,5 @@
 <script setup>
-import { floatIcon } from '../js/useFloatIcon'
+import { floatIcon } from '../js/core'
 </script>
 
 <template>
@@ -25,6 +25,7 @@ import { floatIcon } from '../js/useFloatIcon'
   pointer-events: none;
   z-index: 100;
   line-height: 1;
+  opacity: 0.5;
 }
 .float-icon-enter-active {
   transition: opacity 200ms ease, transform 200ms ease;
